@@ -1,0 +1,16 @@
+node_modules/
+data/
+backups/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+data-export/
+portable-package/
+portable-package-staging/
+.e2e-data/
+test-results/
+playwright-report/
