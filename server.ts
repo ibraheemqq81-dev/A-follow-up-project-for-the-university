@@ -60,7 +60,7 @@ const app = express();
 // client-supplied X-Forwarded-For unless a deployment explicitly configures it.
 const trustedProxyHops = Number(process.env.TRUST_PROXY_HOPS || 0);
 app.set('trust proxy', Number.isInteger(trustedProxyHops) && trustedProxyHops > 0 ? trustedProxyHops : false);
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.APP_PORT || (process.env.PORT && process.env.PORT !== '8080' ? process.env.PORT : 3000);
 
 // ==========================================
 // 1. Security Hardening: JWT Secret Validation (Requirement 1)

@@ -1,6 +1,6 @@
 {
-  "name": "Remix Remix Remix جامعة المستقبل — نظام متابعة حضور التدريسيين والمحاضرات",
-  "description": "Al-Mustaqbal University — Academic Attendance \u0026 Monitoring System: نظام متكامل لإدارة ومتابعة حضور التدريسيين، الكليات، الأقسام، القاعات، الجداول والاستثناءات الأكاديمية",
+  "name": "جامعة المستقبل — نظام متابعة حضور التدريسيين والمحاضرات",
+  "description": "Al-Mustaqbal University — Academic Attendance & Monitoring System: نظام متكامل لإدارة ومتابعة حضور التدريسيين، الكليات، الأقسام، القاعات، الجداول والاستثناءات الأكاديمية",
   "requestFramePermissions": [
     "camera"
   ],
