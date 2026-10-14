@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
-import { LogOut, User as UserIcon, Shield, Building2, Sun, Moon } from 'lucide-react';
+import { LogOut, User as UserIcon, Building2, Sun, Moon } from 'lucide-react';
 import { NotificationDropdown } from '../notifications/NotificationDropdown.tsx';
 
 interface NavbarProps {
@@ -9,7 +9,7 @@ interface NavbarProps {
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onNavigateToAttendance }) => {
-  const { user, logout, switchUser } = useAuth();
+  const { user, logout } = useAuth();
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('uomus_theme') === 'dark';
@@ -72,51 +72,6 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onNavigateToAtt
           <div className="flex items-center gap-3">
             {user ? (
               <div className="flex items-center gap-2 sm:gap-3">
-                {/* Role Switcher */}
-                <div className="hidden md:flex items-center gap-1.5 bg-slate-100/80 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
-                  <span className="text-slate-500 dark:text-slate-400 font-medium px-2">تبديل الحساب:</span>
-                  <button
-                    onClick={() => switchUser('OWNER')}
-                    className={`px-2.5 py-1 rounded-lg transition-colors font-medium ${
-                      user.role === 'OWNER'
-                        ? 'bg-emerald-600 text-white shadow-xs'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    مالك الجامعة
-                  </button>
-                  <button
-                    onClick={() => switchUser('COLLEGE_MONITOR')}
-                    className={`px-2.5 py-1 rounded-lg transition-colors font-medium ${
-                      user.role === 'COLLEGE_MONITOR'
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    الكلية
-                  </button>
-                  <button
-                    onClick={() => switchUser('DEPARTMENT_MONITOR')}
-                    className={`px-2.5 py-1 rounded-lg transition-colors font-medium ${
-                      user.role === 'DEPARTMENT_MONITOR'
-                        ? 'bg-purple-600 text-white shadow-xs'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    القسم
-                  </button>
-                  <button
-                    onClick={() => switchUser('FACULTY')}
-                    className={`px-2.5 py-1 rounded-lg transition-colors font-medium ${
-                      user.role === 'FACULTY'
-                        ? 'bg-amber-600 text-white shadow-xs'
-                        : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700'
-                    }`}
-                  >
-                    تدريسي
-                  </button>
-                </div>
-
                 {/* Theme Toggle Button */}
                 <button
                   type="button"

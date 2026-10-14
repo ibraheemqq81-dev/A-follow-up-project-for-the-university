@@ -27,9 +27,9 @@ async function createAdmin() {
     email,
     'OWNER',
     'مالك النظام ومسؤول الجامعة (OWNER)',
-    0,
+    1,
     'active',
-    0,
+    1,
     hash,
     now,
     now

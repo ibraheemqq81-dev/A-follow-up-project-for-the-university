@@ -1,4 +1,4 @@
-﻿Attendance System Portable
+Attendance System Portable
 Version: 0.0.0
 Packaged: 2026-10-11
 package-lock.json SHA-256: 576A6FF0ADC6A2DC6F5696B5ED122AFA993D6FE9884ECC74EBCA3CD535AB695A

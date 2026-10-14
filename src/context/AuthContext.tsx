@@ -9,7 +9,6 @@ interface AuthContextType {
   login: (credentials: { email: string; password: string }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
-  switchUser: (role: 'OWNER' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -21,23 +20,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchCurrentUser = async () => {
     const currentToken = getStoredToken();
-    const hasExplicitLogout =
-      typeof sessionStorage !== 'undefined' && sessionStorage.getItem('uomus_explicit_logout');
 
     if (!currentToken) {
-      if (!hasExplicitLogout) {
-        try {
-          const res = await api.login({ email: 'faculty.ibraheem@uomus.edu.iq', password: 'Admin@12345678' });
-          if (res?.token && res?.user) {
-            setStoredToken(res.token);
-            setTokenState(res.token);
-            setUser(res.user);
-            return;
-          }
-        } catch {
-          // fallback
-        }
-      }
       setUser(null);
       setIsLoading(false);
       return;
@@ -49,32 +33,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(res.user);
       } else {
         removeStoredToken();
-        if (!hasExplicitLogout) {
-          const loginRes = await api.login({ email: 'faculty.ibraheem@uomus.edu.iq', password: 'Admin@12345678' });
-          if (loginRes?.token && loginRes?.user) {
-            setStoredToken(loginRes.token);
-            setTokenState(loginRes.token);
-            setUser(loginRes.user);
-            return;
-          }
-        }
+        setTokenState(null);
         setUser(null);
       }
     } catch {
       removeStoredToken();
-      if (!hasExplicitLogout) {
-        try {
-          const loginRes = await api.login({ email: 'faculty.ibraheem@uomus.edu.iq', password: 'Admin@12345678' });
-          if (loginRes?.token && loginRes?.user) {
-            setStoredToken(loginRes.token);
-            setTokenState(loginRes.token);
-            setUser(loginRes.user);
-            return;
-          }
-        } catch {
-          // fallback
-        }
-      }
+      setTokenState(null);
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -124,9 +88,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (credentials: { email: string; password: string }) => {
     setIsLoading(true);
     try {
-      if (typeof sessionStorage !== 'undefined') {
-        sessionStorage.removeItem('uomus_explicit_logout');
-      }
       const res = await api.login(credentials);
       if (res.token && res.user) {
         setStoredToken(res.token);
@@ -141,23 +102,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem('uomus_explicit_logout', 'true');
-    }
     removeStoredToken();
     setTokenState(null);
     setUser(null);
-  };
-
-  const switchUser = async (role: 'OWNER' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY') => {
-    const roleAccounts: Record<string, string> = {
-      OWNER: 'admin@uomus.edu.iq',
-      COLLEGE_MONITOR: 'eng.dean@uomus.edu.iq',
-      DEPARTMENT_MONITOR: 'cs.head@uomus.edu.iq',
-      FACULTY: 'faculty.ibraheem@uomus.edu.iq',
-    };
-    const email = roleAccounts[role] || 'admin@uomus.edu.iq';
-    await login({ email, password: 'Admin@12345678' });
   };
 
   const refreshUser = async () => {
@@ -165,7 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, refreshUser, switchUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

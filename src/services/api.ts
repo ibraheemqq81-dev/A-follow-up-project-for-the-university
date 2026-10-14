@@ -14,7 +14,7 @@ export const removeStoredToken = (): void => {
 
 export async function apiRequest<T = any>(
   endpoint: string,
-  options: RequestInit & { _isRetry?: boolean } = {}
+  options: RequestInit = {}
 ): Promise<T> {
   const token = getStoredToken();
   const headers = new Headers(options.headers || {});
@@ -41,31 +41,8 @@ export async function apiRequest<T = any>(
   }
 
   if (!response.ok) {
-    if (response.status === 401 && endpoint !== '/api/auth/login' && !options._isRetry) {
+    if (response.status === 401 && endpoint !== '/api/auth/login') {
       removeStoredToken();
-      const hasExplicitLogout =
-        typeof sessionStorage !== 'undefined' && sessionStorage.getItem('uomus_explicit_logout');
-      if (!hasExplicitLogout) {
-        try {
-          const loginRes = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: 'admin@uomus.edu.iq', password: 'Admin@12345678' }),
-          });
-          if (loginRes.ok) {
-            const loginData = await loginRes.json();
-            if (loginData?.token) {
-              setStoredToken(loginData.token);
-              if (typeof window !== 'undefined') {
-                window.dispatchEvent(new CustomEvent('auth:refreshed', { detail: loginData }));
-              }
-              return apiRequest<T>(endpoint, { ...options, _isRetry: true });
-            }
-          }
-        } catch {
-          // ignore retry failure and proceed to throw
-        }
-      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('auth:unauthorized'));
       }

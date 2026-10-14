@@ -665,73 +665,29 @@ function initDatabase() {
     );
   }
 
-  // Ensure default accounts exist for all roles
-  const defaultHash = bcrypt.hashSync('Admin@12345678', 10);
-  const demoUsers = [
-    {
-      id: 'user-owner-default',
-      uid: 'uid-owner-default',
-      name: 'مدير النظام (الجامعة)',
-      email: 'admin@uomus.edu.iq',
-      role: 'OWNER',
-      roleTitleAr: 'مالك النظام ومسؤول الجامعة (OWNER)',
-    },
-    {
-      id: 'user-col-eng-monitor',
-      uid: 'uid-col-eng-monitor',
-      name: 'د. عميد كلية الهندسة (مراقب الكلية)',
-      email: 'eng.dean@uomus.edu.iq',
-      role: 'COLLEGE_MONITOR',
-      roleTitleAr: 'مراقب كلية الهندسة (COLLEGE_MONITOR)',
-      assignedCollegeId: 'col-eng-01',
-    },
-    {
-      id: 'user-dept-cse-monitor',
-      uid: 'uid-dept-cse-monitor',
-      name: 'رئيس قسم هندسة الحاسوب (مراقب القسم)',
-      email: 'cs.head@uomus.edu.iq',
-      role: 'DEPARTMENT_MONITOR',
-      roleTitleAr: 'مراقب قسم هندسة الحاسوب (DEPARTMENT_MONITOR)',
-      assignedCollegeId: 'col-eng-01',
-      assignedDepartmentId: 'dep-cse-01',
-    },
-    {
-      id: 'user-faculty-ibraheem',
-      uid: 'uid-faculty-ibraheem',
-      name: 'أ.د. إبراهيم محمد حسن (تدريسي)',
-      email: 'faculty.ibraheem@uomus.edu.iq',
-      role: 'FACULTY',
-      roleTitleAr: 'عضو هيئة تدريسية (FACULTY)',
-      assignedCollegeId: 'col-eng-01',
-      assignedDepartmentId: 'dep-cse-01',
-      assignedFacultyId: 'fac-ibraheem',
-    },
-  ];
-
-  for (const u of demoUsers) {
-    const exists = sqlite.prepare('SELECT id FROM users WHERE email = ?').get(u.email);
-    if (!exists) {
-      sqlite.prepare(`
-        INSERT INTO users (
-          id, uid, name, email, role, role_title_ar,
-          assigned_college_id, assigned_department_id, assigned_faculty_id,
-          must_change_password, status, token_version, password_hash, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', 0, ?, ?, ?)
-      `).run(
-        u.id,
-        u.uid,
-        u.name,
-        u.email,
-        u.role,
-        u.roleTitleAr,
-        (u as any).assignedCollegeId || null,
-        (u as any).assignedDepartmentId || null,
-        (u as any).assignedFacultyId || null,
-        defaultHash,
-        now,
-        now
-      );
-    }
+  // Ensure a single OWNER account exists (for first-run setup only)
+  const ownerEmail = process.env.UOMUS_OWNER_EMAIL || 'admin@uomus.edu.iq';
+  const ownerPassword = process.env.UOMUS_OWNER_PASSWORD || 'Admin@12345678';
+  const ownerExists = sqlite.prepare('SELECT id FROM users WHERE email = ?').get(ownerEmail);
+  if (!ownerExists) {
+    const ownerHash = bcrypt.hashSync(ownerPassword, 10);
+    sqlite.prepare(`
+      INSERT INTO users (
+        id, uid, name, email, role, role_title_ar,
+        assigned_college_id, assigned_department_id, assigned_faculty_id,
+        must_change_password, status, token_version, password_hash, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 1, 'active', 0, ?, ?, ?)
+    `).run(
+      'user-owner-default',
+      'uid-owner-default',
+      'مدير النظام (الجامعة)',
+      ownerEmail,
+      'OWNER',
+      'مالك النظام ومسؤول الجامعة (OWNER)',
+      ownerHash,
+      now,
+      now
+    );
   }
 }
 
