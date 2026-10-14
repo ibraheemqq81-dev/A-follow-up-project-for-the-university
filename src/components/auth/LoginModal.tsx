@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
-import { Building2, Lock, Mail, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Building2, Lock, Mail, CircleAlert as AlertCircle, ArrowLeft } from 'lucide-react';
 
 export const LoginModal: React.FC = () => {
   const { login } = useAuth();
