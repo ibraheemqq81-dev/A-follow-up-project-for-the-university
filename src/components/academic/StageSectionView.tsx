@@ -19,20 +19,23 @@ export const StageSectionView: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [stg, sec, dep] = await Promise.all([
+      const [stgRes, secRes, depRes] = await Promise.allSettled([
         api.getStages(),
         api.getSections(),
         api.getDepartments(),
       ]);
-      setStages(stg || []);
-      setSections(sec || []);
-      setDepartments(dep || []);
+      const stg = stgRes.status === 'fulfilled' ? stgRes.value || [] : [];
+      const sec = secRes.status === 'fulfilled' ? secRes.value || [] : [];
+      const dep = depRes.status === 'fulfilled' ? depRes.value || [] : [];
+      setStages(stg);
+      setSections(sec);
+      setDepartments(dep);
       if (dep && dep.length > 0 && !stageForm.departmentId) {
         setStageForm((prev) => ({ ...prev, departmentId: dep[0].id }));
         setSectionForm((prev) => ({ ...prev, departmentId: dep[0].id }));
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // safe fallback
     } finally {
       setIsLoading(false);
     }

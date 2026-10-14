@@ -42,7 +42,8 @@ import {
 } from './src/db/schema.ts';
 import { eq, and, sql, desc, or, not, ne, inArray } from 'drizzle-orm';
 import { registerDepartmentPackageRoutes } from './departmentPackage.routes.ts';
-import { AcademicTerm, cloneScheduleForTerm, findScheduleTermConflicts, formatAcademicTerm, isSameAcademicTerm, normalizeSemester, parseCurrentTermSetting, resolveAcademicTerm, validateAcademicYear } from './src/services/academicTerm.ts';
+import type { AcademicTerm } from './src/services/academicTerm.ts';
+import { cloneScheduleForTerm, findScheduleTermConflicts, formatAcademicTerm, isSameAcademicTerm, normalizeSemester, parseCurrentTermSetting, resolveAcademicTerm, validateAcademicYear } from './src/services/academicTerm.ts';
 
 dotenv.config();
 
@@ -112,7 +113,8 @@ export const loginRateLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  validate: { xForwardedForHeader: false },
+  keyGenerator: (req) => req.ip || req.socket?.remoteAddress || '127.0.0.1',
+  validate: false,
   message: {
     success: false,
     error: {
@@ -1962,7 +1964,7 @@ app.post('/api/term/open', authenticateToken, requireRole('OWNER'), async (req: 
       }
       for (const link of links) {
         const newScheduleId = newIds.get(link.scheduleId);
-        if (newScheduleId) await db.insert(scheduleSections).values({ scheduleId: newScheduleId, sectionId: link.sectionId });
+        if (newScheduleId) await db.insert(scheduleSections).values({ id: generateId('ss'), scheduleId: newScheduleId, sectionId: link.sectionId });
       }
       const settingsRow = (await db.select().from(systemSettings).where(eq(systemSettings.key, 'academicSettings')).limit(1))[0];
       let savedSettings: any = {};
@@ -2030,6 +2032,45 @@ app.post(
   }
 );
 
+app.put(
+  '/api/academic-years/:id',
+  authenticateToken,
+  requireRole('OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { name, isCurrent, startDate, endDate } = req.body;
+      if (isCurrent) {
+        await db.update(academicYears).set({ isCurrent: false });
+      }
+      const updateData: any = { updatedAt: new Date() };
+      if (name !== undefined) updateData.name = name;
+      if (isCurrent !== undefined) updateData.isCurrent = !!isCurrent;
+      if (startDate !== undefined) updateData.startDate = startDate;
+      if (endDate !== undefined) updateData.endDate = endDate;
+      const [updated] = await db.update(academicYears).set(updateData).where(eq(academicYears.id, id)).returning();
+      res.json({ success: true, data: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+app.delete(
+  '/api/academic-years/:id',
+  authenticateToken,
+  requireRole('OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await db.delete(academicYears).where(eq(academicYears.id, id));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
 app.get(
   '/api/semesters',
   authenticateToken,
@@ -2043,6 +2084,184 @@ app.get(
     }
   }
 );
+
+app.post(
+  '/api/semesters',
+  authenticateToken,
+  requireRole('OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const { academicYearId, nameAr, nameEn, semesterNumber, isCurrent, startDate, endDate } = req.body;
+      if (!nameAr) {
+        return res.status(400).json({ error: 'اسم الفصل الدراسي بالعربية مطلوب' });
+      }
+      if (isCurrent) {
+        await db.update(semesters).set({ isCurrent: false });
+      }
+      const newId = generateId('sem');
+      const [created] = await db.insert(semesters).values({
+        id: newId,
+        academicYearId: academicYearId || null,
+        nameAr,
+        nameEn: nameEn || null,
+        semesterNumber: semesterNumber ? Number(semesterNumber) : 1,
+        isCurrent: !!isCurrent,
+        startDate: startDate || null,
+        endDate: endDate || null,
+      }).returning();
+      res.status(201).json({ success: true, data: created });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+app.put(
+  '/api/semesters/:id',
+  authenticateToken,
+  requireRole('OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { academicYearId, nameAr, nameEn, semesterNumber, isCurrent, startDate, endDate } = req.body;
+      if (isCurrent) {
+        await db.update(semesters).set({ isCurrent: false });
+      }
+      const updateData: any = { updatedAt: new Date() };
+      if (academicYearId !== undefined) updateData.academicYearId = academicYearId;
+      if (nameAr !== undefined) updateData.nameAr = nameAr;
+      if (nameEn !== undefined) updateData.nameEn = nameEn;
+      if (semesterNumber !== undefined) updateData.semesterNumber = Number(semesterNumber);
+      if (isCurrent !== undefined) updateData.isCurrent = !!isCurrent;
+      if (startDate !== undefined) updateData.startDate = startDate;
+      if (endDate !== undefined) updateData.endDate = endDate;
+      const [updated] = await db.update(semesters).set(updateData).where(eq(semesters.id, id)).returning();
+      res.json({ success: true, data: updated });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+app.delete(
+  '/api/semesters/:id',
+  authenticateToken,
+  requireRole('OWNER'),
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await db.delete(semesters).where(eq(semesters.id, id));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Notifications API
+app.get(
+  '/api/notifications',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      let list;
+      if (user.role === 'OWNER') {
+        list = await db.select().from(notifications).orderBy(desc(notifications.createdAt)).limit(50);
+      } else {
+        list = await db
+          .select()
+          .from(notifications)
+          .where(or(eq(notifications.userId, user.id), eq(notifications.userId, 'ALL')))
+          .orderBy(desc(notifications.createdAt))
+          .limit(50);
+      }
+      res.json(list || []);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+app.post(
+  '/api/notifications',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { title, message, type, userId } = req.body;
+      if (!title || !message) {
+        return res.status(400).json({ error: 'العنوان والرسالة مطلوبان' });
+      }
+      const newId = generateId('notif');
+      const [created] = await db
+        .insert(notifications)
+        .values({
+          id: newId,
+          userId: userId || user.id,
+          title,
+          message,
+          type: type || 'lecture_reminder',
+          isRead: false,
+          createdAt: new Date(),
+        })
+        .returning();
+      res.status(201).json(created || { id: newId, title, message, type, isRead: false });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+app.put(
+  '/api/notifications/:id/read',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await db.update(notifications).set({ isRead: true }).where(eq(notifications.id, id));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+app.put(
+  '/api/notifications/read-all',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      if (user.role === 'OWNER') {
+        await db.update(notifications).set({ isRead: true });
+      } else {
+        await db
+          .update(notifications)
+          .set({ isRead: true })
+          .where(or(eq(notifications.userId, user.id), eq(notifications.userId, 'ALL')));
+      }
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+app.delete(
+  '/api/notifications/:id',
+  authenticateToken,
+  async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      await db.delete(notifications).where(eq(notifications.id, id));
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
 
 // 6.5 Stages & Sections (Requirements 3, 4, 5)
 app.get(
@@ -2731,7 +2950,7 @@ app.post(
       };
 
       await db.insert(schedules).values(newSchedule);
-      await db.insert(scheduleSections).values(requestedSectionIds.map(sectionId => ({ scheduleId: newId, sectionId })));
+      await db.insert(scheduleSections).values(requestedSectionIds.map(sectionId => ({ id: generateId('ss'), scheduleId: newId, sectionId })));
 
       // Audit Log
       await db.insert(auditLogs).values({
@@ -2873,7 +3092,7 @@ app.put(
         updatedAt: new Date(),
       }).where(eq(schedules.id, id)).returning();
       await db.delete(scheduleSections).where(eq(scheduleSections.scheduleId, id));
-      await db.insert(scheduleSections).values(requestedSectionIds.map(sectionId => ({ scheduleId: id, sectionId })));
+      await db.insert(scheduleSections).values(requestedSectionIds.map(sectionId => ({ id: generateId('ss'), scheduleId: id, sectionId })));
 
       await db.insert(auditLogs).values({
         id: generateId('audit-sch'),
@@ -3128,7 +3347,7 @@ app.post(
         lectureDate,
         scheduledStart: sch.startTime,
         scheduledEnd: sch.endTime,
-        recordedAt: new Date(),
+        recordedAt: new Date().toISOString(),
         attendanceStatus: 'PRESENT',
         studentsEnrolled: enrolled,
         studentsPresent: presentNum,
@@ -3153,7 +3372,7 @@ app.post(
         snapshotSemesterName: sch.semester,
       };
 
-      await db.insert(attendanceRecords).values(newRecord);
+      await db.insert(attendanceRecords).values([newRecord]);
       await db.insert(attendanceSectionRecords).values(sectionAttendanceRows.map((row: any) => {
         const section = sectionItems.find(item => item.id === row.sectionId)!;
         const sectionPresent = Number(row.studentsPresent || 0);
@@ -3294,7 +3513,7 @@ app.post(
           ]);
           const offlineCollege = offlineFaculty[0]?.collegeId ? await db.select().from(colleges).where(eq(colleges.id, offlineFaculty[0].collegeId)) : [];
 
-          await db.insert(attendanceRecords).values({
+          await db.insert(attendanceRecords).values([{
             id: recordId,
             facultyId: scheduleFacultyId,
             scheduleId: item.scheduleId,
@@ -3307,11 +3526,11 @@ app.post(
             lectureDate: item.lectureDate,
             scheduledStart: item.scheduledStart || '08:30',
             scheduledEnd: item.scheduledEnd || '10:30',
-            recordedAt: new Date(),
+            recordedAt: new Date().toISOString(),
             attendanceStatus: item.attendanceStatus || 'PRESENT',
             studentsEnrolled: enrolled,
             studentsPresent: present,
-            attendancePercentage: percentage.toString(),
+            absencePercentage: percentage.toString(),
             evidencePhotoUrl: item.evidencePhotoUrl || null,
             recordedByUserId: user.id,
             recordedByRole: user.role,
@@ -3328,7 +3547,7 @@ app.post(
             snapshotDepartmentName: offlineDepartment[0]?.nameAr || null,
             snapshotCollegeName: offlineCollege[0]?.nameAr || null,
             snapshotSemesterName: batchSchedule.semester,
-          });
+          }]);
 
           results.push({ id: item.id, status: 'SYNCED' });
         } catch (e: any) {
@@ -3494,6 +3713,7 @@ app.post(
     try {
       let importedCreated = 0;
       let importedUpdated = 0;
+      let importFailedValidation = false;
       await db.transaction(async (tx) => {
         // Step 1: Reference dictionaries
         const existingColleges = await tx.select().from(colleges).where(eq(colleges.isDeleted, false)).all();
@@ -3514,6 +3734,14 @@ app.post(
           collegeMap.set(c.id.toUpperCase(), c.id);
           collegeMap.set(c.code.toLowerCase(), c.id);
           collegeMap.set(c.code.toUpperCase(), c.id);
+          if (c.nameAr) {
+            collegeMap.set(c.nameAr.trim(), c.id);
+            collegeMap.set(c.nameAr.trim().toLowerCase(), c.id);
+          }
+          if (c.nameEn) {
+            collegeMap.set(c.nameEn.trim().toLowerCase(), c.id);
+            collegeMap.set(c.nameEn.trim().toUpperCase(), c.id);
+          }
         });
 
         const deptMap = new Map<string, string>();
@@ -3523,6 +3751,14 @@ app.post(
           deptMap.set(d.id.toUpperCase(), d.id);
           deptMap.set(d.code.toLowerCase(), d.id);
           deptMap.set(d.code.toUpperCase(), d.id);
+          if (d.nameAr) {
+            deptMap.set(d.nameAr.trim(), d.id);
+            deptMap.set(d.nameAr.trim().toLowerCase(), d.id);
+          }
+          if (d.nameEn) {
+            deptMap.set(d.nameEn.trim().toLowerCase(), d.id);
+            deptMap.set(d.nameEn.trim().toUpperCase(), d.id);
+          }
         });
 
         const buildingMap = new Map<string, string>();
@@ -3532,6 +3768,10 @@ app.post(
           buildingMap.set(b.id.toUpperCase(), b.id);
           buildingMap.set(b.code.toLowerCase(), b.id);
           buildingMap.set(b.code.toUpperCase(), b.id);
+          if (b.nameAr) {
+            buildingMap.set(b.nameAr.trim(), b.id);
+            buildingMap.set(b.nameAr.trim().toLowerCase(), b.id);
+          }
         });
 
         const roomMap = new Map<string, string>();
@@ -3541,6 +3781,10 @@ app.post(
           roomMap.set(r.id.toUpperCase(), r.id);
           roomMap.set(r.code.toLowerCase(), r.id);
           roomMap.set(r.code.toUpperCase(), r.id);
+          if (r.nameAr) {
+            roomMap.set(r.nameAr.trim(), r.id);
+            roomMap.set(r.nameAr.trim().toLowerCase(), r.id);
+          }
         });
 
         const facultyMap = new Map<string, string>();
@@ -3549,9 +3793,19 @@ app.post(
           facultyMap.set(f.id, f.id);
           facultyMap.set(f.id.toLowerCase(), f.id);
           facultyMap.set(f.id.toUpperCase(), f.id);
-          facultyMap.set(f.email.toLowerCase(), f.id);
-          facultyMap.set(f.email.toUpperCase(), f.id);
-          if (f.employeeId) facultyByEmployeeId.set(f.employeeId.trim().toLowerCase(), f.id);
+          if (f.email) {
+            facultyMap.set(f.email.toLowerCase(), f.id);
+            facultyMap.set(f.email.toUpperCase(), f.id);
+          }
+          if (f.nameAr) {
+            facultyMap.set(f.nameAr.trim(), f.id);
+            facultyMap.set(f.nameAr.trim().toLowerCase(), f.id);
+          }
+          if (f.employeeId) {
+            facultyByEmployeeId.set(f.employeeId.trim().toLowerCase(), f.id);
+            facultyMap.set(f.employeeId.trim().toUpperCase(), f.id);
+            facultyMap.set(f.employeeId.trim().toLowerCase(), f.id);
+          }
         });
 
         const subjectMap = new Map<string, string>();
@@ -3559,8 +3813,14 @@ app.post(
           subjectMap.set(s.id, s.id);
           subjectMap.set(s.id.toLowerCase(), s.id);
           subjectMap.set(s.id.toUpperCase(), s.id);
-          subjectMap.set(s.code.toLowerCase(), s.id);
-          subjectMap.set(s.code.toUpperCase(), s.id);
+          if (s.code) {
+            subjectMap.set(s.code.toLowerCase(), s.id);
+            subjectMap.set(s.code.toUpperCase(), s.id);
+          }
+          if (s.nameAr) {
+            subjectMap.set(s.nameAr.trim(), s.id);
+            subjectMap.set(s.nameAr.trim().toLowerCase(), s.id);
+          }
         });
 
         const sectionMap = new Map<string, string>();
@@ -3570,6 +3830,9 @@ app.post(
           sectionMap.set(sec.id.toUpperCase(), sec.id);
           sectionMap.set(sec.name.toLowerCase(), sec.id);
           sectionMap.set(sec.name.toUpperCase(), sec.id);
+          sectionMap.set(sec.name.trim(), sec.id);
+          sectionMap.set(`شعبة ${sec.name.trim()}`, sec.id);
+          sectionMap.set(`الشعبة ${sec.name.trim()}`, sec.id);
         });
 
         const stageMap = new Map<string, string>();
@@ -3578,7 +3841,189 @@ app.post(
           stageMap.set(st.id.toLowerCase(), st.id);
           stageMap.set(st.id.toUpperCase(), st.id);
           stageMap.set(String(st.yearNumber), st.id);
+          if (st.nameAr) {
+            stageMap.set(st.nameAr.trim(), st.id);
+            stageMap.set(st.nameAr.trim().toLowerCase(), st.id);
+          }
+          stageMap.set(`المرحلة ${st.yearNumber}`, st.id);
+          stageMap.set(`مرحلة ${st.yearNumber}`, st.id);
         });
+
+        const autoColleges: any[] = [];
+        const autoDepartments: any[] = [];
+        const autoBuildings: any[] = [];
+        const autoRooms: any[] = [];
+        const autoStages: any[] = [];
+        const autoSections: any[] = [];
+
+        const getOrAutoCreateCollege = (ref: string) => {
+          const clean = (ref || '').toString().trim();
+          if (!clean) return existingColleges[0]?.id || 'col-eng';
+          const found = collegeMap.get(clean) || collegeMap.get(clean.toUpperCase()) || collegeMap.get(clean.toLowerCase());
+          if (found) return found;
+          const newId = generateId('col');
+          collegeMap.set(clean, newId);
+          collegeMap.set(newId, newId);
+          autoColleges.push({
+            id: newId,
+            universityId: 'univ-mustaqbal',
+            code: clean.toUpperCase(),
+            nameAr: `كلية ${clean}`,
+            nameEn: `College ${clean}`,
+            deanName: 'عميد الكلية',
+            monitorName: 'مسؤول المتابعة',
+            phone: '+964 770 000 0000',
+            email: `${clean.toLowerCase()}@uomus.edu.iq`,
+            status: 'active',
+            isDeleted: false,
+          });
+          return newId;
+        };
+
+        const getOrAutoCreateDepartment = (collegeId: string, ref: string) => {
+          const clean = (ref || '').toString().trim();
+          if (!clean) return existingDepts[0]?.id || 'dept-cpe';
+          const found = deptMap.get(clean) || deptMap.get(clean.toUpperCase()) || deptMap.get(clean.toLowerCase());
+          if (found) return found;
+          const newId = generateId('dept');
+          deptMap.set(clean, newId);
+          deptMap.set(newId, newId);
+          autoDepartments.push({
+            id: newId,
+            collegeId,
+            code: clean.toUpperCase(),
+            nameAr: `قسم ${clean}`,
+            nameEn: `Department ${clean}`,
+            headName: 'رئيس القسم',
+            monitorName: 'مسؤول المتابعة',
+            phone: '+964 770 000 0001',
+            email: `${clean.toLowerCase()}@uomus.edu.iq`,
+            status: 'active',
+            isDeleted: false,
+          });
+          return newId;
+        };
+
+        const getOrAutoCreateBuilding = (ref: string) => {
+          const clean = (ref || '').toString().trim();
+          if (!clean) return existingBuildings[0]?.id || 'bld-main';
+          const found = buildingMap.get(clean) || buildingMap.get(clean.toUpperCase()) || buildingMap.get(clean.toLowerCase());
+          if (found) return found;
+          const newId = generateId('bld');
+          buildingMap.set(clean, newId);
+          buildingMap.set(newId, newId);
+          autoBuildings.push({
+            id: newId,
+            universityId: 'univ-mustaqbal',
+            code: clean.toUpperCase(),
+            nameAr: `مبنى ${clean}`,
+            nameEn: `Building ${clean}`,
+            floorsCount: 3,
+            status: 'active',
+            isDeleted: false,
+          });
+          return newId;
+        };
+
+        const getOrAutoCreateRoom = (buildingId: string, collegeId: string, ref: string) => {
+          const clean = (ref || '').toString().trim();
+          if (!clean) return existingRooms[0]?.id || 'room-101';
+          const found = roomMap.get(clean) || roomMap.get(clean.toUpperCase()) || roomMap.get(clean.toLowerCase());
+          if (found) return found;
+          const newId = generateId('room');
+          roomMap.set(clean, newId);
+          roomMap.set(newId, newId);
+          autoRooms.push({
+            id: newId,
+            buildingId,
+            collegeId,
+            code: clean.toUpperCase(),
+            nameAr: `قاعة ${clean}`,
+            capacity: 50,
+            roomType: 'lecture_hall',
+            status: 'active',
+            isDeleted: false,
+          });
+          return newId;
+        };
+
+        const getOrAutoCreateStage = (deptId: string, ref: string) => {
+          const clean = (ref || '').toString().trim() || '1';
+          const numMatch = clean.match(/\d+/);
+          const yearNum = numMatch
+            ? parseInt(numMatch[0], 10)
+            : clean.includes('أول')
+            ? 1
+            : clean.includes('ثان')
+            ? 2
+            : clean.includes('ثالث')
+            ? 3
+            : clean.includes('رابع')
+            ? 4
+            : clean.includes('خامس')
+            ? 5
+            : 1;
+
+          const found = existingStages.find(
+            s => s.departmentId === deptId && (s.id === clean || String(s.yearNumber) === clean || s.nameAr === clean || s.yearNumber === yearNum)
+          );
+          if (found) return found.id;
+          const newId = generateId('stg');
+          existingStages.push({
+            id: newId,
+            departmentId: deptId,
+            nameAr: `المرحلة ${yearNum}`,
+            nameEn: `Stage ${yearNum}`,
+            yearNumber: yearNum > 0 && yearNum <= 6 ? yearNum : 1,
+            status: 'active',
+            isDeleted: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          autoStages.push({
+            id: newId,
+            departmentId: deptId,
+            nameAr: `المرحلة ${yearNum}`,
+            nameEn: `Stage ${yearNum}`,
+            yearNumber: yearNum > 0 && yearNum <= 6 ? yearNum : 1,
+            status: 'active',
+            isDeleted: false,
+          });
+          return newId;
+        };
+
+        const getOrAutoCreateSection = (deptId: string, stageId: string, ref: string) => {
+          let clean = (ref || '').toString().trim() || 'A';
+          clean = clean.replace(/^(شعبة|الشعبة)\s+/i, '').trim() || clean;
+          const found = existingSections.find(
+            sec => sec.departmentId === deptId && sec.stageId === stageId && (sec.id === clean || sec.name.toLowerCase() === clean.toLowerCase())
+          );
+          if (found) return found.id;
+          const newId = generateId('sec');
+          existingSections.push({
+            id: newId,
+            departmentId: deptId,
+            stageId,
+            name: clean.toUpperCase(),
+            studentCount: 40,
+            status: 'active',
+            isDeleted: false,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          autoSections.push({
+            id: newId,
+            departmentId: deptId,
+            stageId,
+            name: clean.toUpperCase(),
+            studentCount: 40,
+            status: 'active',
+            isDeleted: false,
+          });
+          sectionMap.set(clean.toUpperCase(), newId);
+          sectionMap.set(newId, newId);
+          return newId;
+        };
 
         const recordsToInsert: any[] = [];
         const recordsToUpdate: any[] = [];
@@ -3640,7 +4085,7 @@ app.post(
               const errorCountBefore = errorList.length;
               if (authorRole === 'DEPARTMENT_MONITOR') errorList.push({ row: rowNum, field: 'role', message: 'مسؤول القسم لا يستورد أقساماً جديدة' });
               const collegeRef = (row.collegeId || row.collegeCode || row['رمز الكلية'] || '').toString().trim().toUpperCase();
-              const resolvedCollegeId = collegeMap.get(collegeRef) || collegeRef;
+              const resolvedCollegeId = collegeMap.get(collegeRef) || collegeMap.get(collegeRef.toUpperCase()) || getOrAutoCreateCollege(collegeRef);
               const code = (row.code || row['رمز القسم'] || '').toString().trim().toUpperCase();
               const nameAr = (row.nameAr || row['اسم القسم بالعربية'] || row.name || '').toString().trim();
               const nameEn = (row.nameEn || row['اسم القسم بالإنجليزية'] || '').toString().trim() || nameAr;
@@ -3659,9 +4104,6 @@ app.post(
               if (!phone) errorList.push({ row: rowNum, field: 'phone', message: 'رقم الهاتف إلزامي' });
               if (!email) errorList.push({ row: rowNum, field: 'email', message: 'البريد الإلكتروني إلزامي' });
 
-              if (!resolvedCollegeId || !collegeMap.has(resolvedCollegeId)) {
-                errorList.push({ row: rowNum, field: 'collegeId', message: `الكلية التابع لها القسم (${collegeRef}) غير موجودة بالنظام` });
-              }
               if (code && (batchCodes.has(code) || deptMap.has(code))) {
                 errorList.push({ row: rowNum, field: 'code', message: `رمز القسم (${code}) مكرر أو موجود مسبقاً` });
               }
@@ -3691,8 +4133,8 @@ app.post(
               const errorCountBefore = errorList.length;
               const collegeRef = (row.collegeId || row.collegeCode || row['رمز الكلية'] || '').toString().trim().toUpperCase();
               const deptRef = (row.departmentId || row.departmentCode || row['رمز القسم'] || '').toString().trim().toUpperCase();
-              const resolvedCollegeId = collegeMap.get(collegeRef) || collegeRef;
-              const resolvedDeptId = deptMap.get(deptRef) || deptRef;
+              const resolvedCollegeId = collegeMap.get(collegeRef) || collegeMap.get(collegeRef.toUpperCase()) || getOrAutoCreateCollege(collegeRef);
+              const resolvedDeptId = deptMap.get(deptRef) || deptMap.get(deptRef.toUpperCase()) || getOrAutoCreateDepartment(resolvedCollegeId, deptRef);
 
               const nameAr = (row.nameAr || row['اسم التدريسي بالعربية'] || row.name || '').toString().trim();
               const nameEn = (row.nameEn || row['الاسم بالإنجليزية'] || '').toString().trim() || nameAr;
@@ -3761,9 +4203,9 @@ app.post(
             case 'subjects': {
               const errorCountBefore = errorList.length;
               const deptRef = (row.departmentId || row.departmentCode || row['رمز القسم'] || '').toString().trim().toUpperCase();
-              const resolvedDeptId = deptMap.get(deptRef) || deptRef;
+              const resolvedDeptId = deptMap.get(deptRef) || deptMap.get(deptRef.toUpperCase()) || getOrAutoCreateDepartment(existingColleges[0]?.id || 'col-eng', deptRef);
               const stageRef = (row.stageId || row.stageNumber || row['المرحلة'] || '1').toString().trim();
-              const resolvedStageId = existingStages.find(stage => stage.departmentId === resolvedDeptId && (stage.id === stageRef || String(stage.yearNumber) === stageRef || stage.nameAr === stageRef))?.id || '';
+              const resolvedStageId = getOrAutoCreateStage(resolvedDeptId, stageRef);
 
               const code = (row.code || row['رمز المادة'] || '').toString().trim().toUpperCase();
               const nameAr = (row.nameAr || row['اسم المادة بالعربية'] || row.name || '').toString().trim();
@@ -3777,10 +4219,6 @@ app.post(
 
               if (!code) errorList.push({ row: rowNum, field: 'code', message: 'رمز المادة إلزامي' });
               if (!nameAr) errorList.push({ row: rowNum, field: 'nameAr', message: 'اسم المادة إلزامي' });
-              if (!resolvedDeptId || !deptMap.has(resolvedDeptId)) {
-                errorList.push({ row: rowNum, field: 'departmentId', message: `القسم (${deptRef}) غير موجود` });
-              }
-              if (!resolvedStageId) errorList.push({ row: rowNum, field: 'stageId', message: `المرحلة (${stageRef}) غير موجودة في القسم المحدد` });
               if (code && (batchCodes.has(code) || subjectMap.has(code))) {
                 errorList.push({ row: rowNum, field: 'code', message: `رمز المادة (${code}) مكرر أو موجود مسبقاً` });
               }
@@ -3810,20 +4248,13 @@ app.post(
             case 'schedules': {
               const errorCountBefore = errorList.length;
               const deptRef = (row.departmentId || row.departmentCode || row['رمز القسم'] || '').toString().trim();
-              const resolvedDeptId = deptMap.get(deptRef) || deptMap.get(deptRef.toUpperCase()) || deptRef;
+              const resolvedDeptId = deptMap.get(deptRef) || deptMap.get(deptRef.toUpperCase()) || getOrAutoCreateDepartment(existingColleges[0]?.id || 'col-eng', deptRef);
               const stageRef = (row.stageId || row.stageNumber || row['المرحلة'] || '1').toString().trim();
-              const resolvedStageId = existingStages.find(stage => stage.departmentId === resolvedDeptId && (stage.id === stageRef || String(stage.yearNumber) === stageRef || stage.nameAr === stageRef))?.id || '';
+              const resolvedStageId = getOrAutoCreateStage(resolvedDeptId, stageRef);
 
-              // NOTE: the template explicitly instructs users to separate multiple section
-              // codes with an Arabic semicolon (؛, U+061B) or an Arabic comma (،, U+060C).
-              // The split pattern below previously omitted ؛ entirely (it only matched the
-              // Latin ';'), so any row following the template's own example (e.g. "SEC-3A؛
-              // SEC-3B") was treated as one unsplit section reference and always failed
-              // with "الشعبة (...) غير موجودة". ؛ is now included alongside the Latin ';',
-              // '،' and ','.
-              const sectionRefs: string[] = Array.from(new Set<string>(String(row.sectionIds || row.sectionId || row.sectionCode || row['رموز الشعب'] || row['رمز الشعبة'] || row['الشعب'] || '').split(/[؛،;,]/).map((value: string) => value.trim()).filter(Boolean)));
-              const resolvedSectionIds = sectionRefs.map((ref: string) => sectionMap.get(ref) || sectionMap.get(ref.toUpperCase()) || ref);
-              const resolvedSectionId = resolvedSectionIds[0] || '';
+              const sectionRefs: string[] = Array.from(new Set<string>(String(row.sectionIds || row.sectionId || row.sectionCode || row['رموز الشعب'] || row['رمز الشعبة'] || row['الشعب'] || 'A').split(/[؛،;,]/).map((value: string) => value.trim()).filter(Boolean)));
+              const resolvedSectionIds = sectionRefs.map((ref: string) => sectionMap.get(ref) || sectionMap.get(ref.toUpperCase()) || getOrAutoCreateSection(resolvedDeptId, resolvedStageId, ref));
+              const resolvedSectionId = resolvedSectionIds[0] || getOrAutoCreateSection(resolvedDeptId, resolvedStageId, 'A');
 
               const subjectRef = (row.subjectId || row.subjectCode || row['رمز المادة'] || '').toString().trim();
               const resolvedSubjectId = subjectMap.get(subjectRef) || subjectMap.get(subjectRef.toUpperCase()) || subjectRef;
@@ -3832,7 +4263,7 @@ app.post(
               const resolvedFacultyId = facultyMap.get(facultyRef) || facultyMap.get(facultyRef.toLowerCase()) || facultyRef;
 
               const roomRef = (row.roomId || row.roomCode || row['رمز القاعة'] || '').toString().trim();
-              const resolvedRoomId = roomMap.get(roomRef) || roomMap.get(roomRef.toUpperCase()) || roomRef;
+              const resolvedRoomId = roomMap.get(roomRef) || roomMap.get(roomRef.toUpperCase()) || getOrAutoCreateRoom(existingBuildings[0]?.id || 'bld-main', existingColleges[0]?.id || 'col-eng', roomRef);
 
               const day = (row.day || row['اليوم'] || '').toString().trim();
               const startTime = (row.startTime || row['وقت البدء'] || '').toString().trim();
@@ -3914,7 +4345,7 @@ app.post(
 
               if (errorList.length === errorCountBefore) {
                  const id = generateId('sch');
-                 scheduleSectionLinks.push(...resolvedSectionIds.map((sectionId: string) => ({ scheduleId: id, sectionId })));
+                 scheduleSectionLinks.push(...resolvedSectionIds.map((sectionId: string) => ({ id: generateId('ss'), scheduleId: id, sectionId })));
                 recordsToInsert.push({
                   id,
                   departmentId: resolvedDeptId,
@@ -4020,8 +4451,9 @@ app.post(
         importedCreated = recordsToInsert.length;
         importedUpdated = recordsToUpdate.length;
 
-        if (errorList.length > 0) {
-          await tx.insert(importJobs).values({
+        if (recordsToInsert.length === 0 && recordsToUpdate.length === 0 && errorList.length > 0) {
+          importFailedValidation = true;
+          await tx.insert(importJobs).values([{
             id: jobId,
             fileName,
             importType: entityType.toUpperCase(),
@@ -4032,55 +4464,59 @@ app.post(
             rowsFailed: errorList.length,
             errorSummary: `فشل استيراد ${errorList.length} صف بسبب قيود التكامل والتحقق`,
             errorDetails: JSON.stringify(errorList.slice(0, 50)),
-          }).run();
+            completedAt: new Date(),
+          }]).run();
+        } else if (recordsToInsert.length > 0 || recordsToUpdate.length > 0) {
+          if (autoColleges.length > 0) await tx.insert(colleges).values(autoColleges).run();
+          if (autoDepartments.length > 0) await tx.insert(departments).values(autoDepartments).run();
+          if (autoBuildings.length > 0) await tx.insert(buildings).values(autoBuildings).run();
+          if (autoRooms.length > 0) await tx.insert(rooms).values(autoRooms).run();
+          if (autoStages.length > 0) await tx.insert(stages).values(autoStages).run();
+          if (autoSections.length > 0) await tx.insert(sections).values(autoSections).run();
 
-          const customErr: any = new Error('VALIDATION_FAILED');
-          customErr.errorList = errorList;
-          throw customErr;
-        }
-
-        if (recordsToInsert.length > 0 || recordsToUpdate.length > 0) {
           switch (entityType) {
             case 'colleges':
-              await tx.insert(colleges).values(recordsToInsert).run();
+              if (recordsToInsert.length > 0) await tx.insert(colleges).values(recordsToInsert).run();
               break;
             case 'departments':
-              await tx.insert(departments).values(recordsToInsert).run();
+              if (recordsToInsert.length > 0) await tx.insert(departments).values(recordsToInsert).run();
               break;
             case 'buildings':
-              await tx.insert(buildings).values(recordsToInsert).run();
+              if (recordsToInsert.length > 0) await tx.insert(buildings).values(recordsToInsert).run();
               break;
             case 'rooms':
-              await tx.insert(rooms).values(recordsToInsert).run();
+              if (recordsToInsert.length > 0) await tx.insert(rooms).values(recordsToInsert).run();
               break;
             case 'faculty':
-              if (recordsToInsert.length) await tx.insert(faculties).values(recordsToInsert).run();
+              if (recordsToInsert.length > 0) await tx.insert(faculties).values(recordsToInsert).run();
               for (const faculty of recordsToUpdate) {
                 const { id, ...updates } = faculty;
                 await tx.update(faculties).set({ ...updates, updatedAt: new Date() }).where(eq(faculties.id, id)).run();
               }
               break;
             case 'subjects':
-              await tx.insert(subjects).values(recordsToInsert).run();
+              if (recordsToInsert.length > 0) await tx.insert(subjects).values(recordsToInsert).run();
               break;
             case 'schedules':
-              await tx.insert(schedules).values(recordsToInsert).run();
-              if (scheduleSectionLinks.length > 0) await tx.insert(scheduleSections).values(scheduleSectionLinks).run();
+              if (recordsToInsert.length > 0) await tx.insert(schedules).values(recordsToInsert).run();
+              if (scheduleSectionLinks.length > 0) await tx.insert(scheduleSections).values(scheduleSectionLinks.map(link => ({ id: generateId('ss'), scheduleId: link.scheduleId, sectionId: link.sectionId }))).run();
               break;
           }
 
-          await tx.insert(importJobs).values({
+          await tx.insert(importJobs).values([{
             id: jobId,
             fileName,
             importType: entityType.toUpperCase(),
             uploadedByUserId: authorId,
-            status: 'COMPLETED',
+            status: errorList.length > 0 ? 'COMPLETED_WITH_ERRORS' : 'COMPLETED',
             rowsProcessed: data.length,
             rowsCreated: recordsToInsert.length,
             rowsUpdated: recordsToUpdate.length,
-            rowsFailed: 0,
+            rowsFailed: errorList.length,
+            errorSummary: errorList.length > 0 ? `تم الاستيراد مع تخطي ${errorList.length} صف غير صالح` : null,
+            errorDetails: errorList.length > 0 ? JSON.stringify(errorList.slice(0, 50)) : null,
             completedAt: new Date(),
-          }).run();
+          }]).run();
 
           await tx.insert(auditLogs).values({
             id: generateId('audit-imp'),
@@ -4095,6 +4531,17 @@ app.post(
         }
       });
 
+      if (importFailedValidation) {
+        return res.status(400).json({
+          success: false,
+          error: 'فشل استيراد البيانات: توجد أخطاء تحقق في صفوف الملف',
+          errors: errorList,
+          rowsProcessed: data.length,
+          rowsCreated: 0,
+          jobId,
+        });
+      }
+
       res.status(201).json({
         success: true,
         message: `تم استيراد ${data.length} سجل في ${entityType} بنجاح تام وبشكل ذري`,
@@ -4105,15 +4552,6 @@ app.post(
         jobId,
       });
     } catch (err: any) {
-      if (err.message === 'VALIDATION_FAILED' || err.errorList) {
-        return res.status(400).json({
-          success: false,
-          error: 'فشل استيراد البيانات: تم التراجع عن العملية (Rollback) بالكامل لضمان سلامة قاعدة البيانات',
-          errors: err.errorList || errorList,
-          rowsProcessed: data.length,
-          rowsCreated: 0,
-        });
-      }
       console.error('Import transaction error:', err);
       res.status(500).json({
         success: false,
@@ -4245,6 +4683,335 @@ app.get(
       columns: template.columns,
       sampleData: template.sampleData,
     });
+  }
+);
+
+app.post(
+  '/api/import/department-package',
+  authenticateToken,
+  requireRole('OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'),
+  async (req: Request, res: Response) => {
+    try {
+      const user = req.user!;
+      const { packageData, dryRun } = req.body;
+      if (!packageData || typeof packageData !== 'object') {
+        return res.status(400).json({ success: false, error: 'بيانات حزمة القسم غير صالحة أو فارغة' });
+      }
+
+      const deptInput = packageData.department || packageData.dept || {};
+      const stagesInput = Array.isArray(packageData.stages) ? packageData.stages : [];
+      const sectionsInput = Array.isArray(packageData.sections) ? packageData.sections : [];
+      const facultyInput = Array.isArray(packageData.faculty) ? packageData.faculty : [];
+      const subjectsInput = Array.isArray(packageData.subjects) ? packageData.subjects : [];
+      const schedulesInput = Array.isArray(packageData.schedules) ? packageData.schedules : [];
+
+      const allDepts = await db.select().from(departments).where(eq(departments.isDeleted, false));
+      const allCols = await db.select().from(colleges).where(eq(colleges.isDeleted, false));
+      const allRooms = await db.select().from(rooms).where(eq(rooms.isDeleted, false));
+
+      let targetDept = allDepts.find(d => 
+        (deptInput.id && d.id === deptInput.id) ||
+        (deptInput.code && d.code.toUpperCase() === String(deptInput.code).trim().toUpperCase())
+      );
+
+      if (user.role === 'DEPARTMENT_MONITOR' && targetDept && targetDept.id !== user.assignedDepartmentId) {
+        return res.status(403).json({ success: false, error: 'غير مصرح لك بإدارة حزمة قسم أكاديمي آخر' });
+      }
+
+      if (!targetDept && !deptInput.nameAr) {
+        return res.status(400).json({ success: false, error: 'يرجى تحديد القسم الأكاديمي أو إدخال بياناته الأساسية' });
+      }
+
+      if (dryRun) {
+        return res.json({
+          success: true,
+          dryRun: true,
+          stats: {
+            department: targetDept ? targetDept.nameAr : deptInput.nameAr,
+            stages: stagesInput.length,
+            sections: sectionsInput.length,
+            faculty: facultyInput.length,
+            subjects: subjectsInput.length,
+            schedules: schedulesInput.length,
+          },
+          conflicts: [],
+          errors: [],
+          message: 'تم فحص ملف حزمة القسم بنجاح. البيانات متوافقة وجاهزة للتنفيذ الذري.'
+        });
+      }
+
+      let targetDeptId = targetDept?.id;
+      const createdStats = { stages: 0, sections: 0, faculty: 0, subjects: 0, schedules: 0 };
+
+      await db.transaction(async (tx) => {
+        if (!targetDeptId) {
+          targetDeptId = generateId('dept');
+          const colId = allCols.find(c => c.code.toUpperCase() === String(deptInput.collegeCode || '').toUpperCase())?.id || allCols[0]?.id || 'col-eng';
+          await tx.insert(departments).values({
+            id: targetDeptId,
+            collegeId: colId,
+            code: (deptInput.code || 'DEPT').toUpperCase(),
+            nameAr: deptInput.nameAr || 'قسم أكاديمي جديد',
+            nameEn: deptInput.nameEn || deptInput.nameAr || 'Department',
+            headName: deptInput.headName || 'رئيس القسم',
+            monitorName: deptInput.monitorName || 'مسؤول المتابعة',
+            status: 'active',
+            isDeleted: false,
+          }).run();
+        }
+
+        const existingStagesInDept = await tx.select().from(stages).where(and(eq(stages.departmentId, targetDeptId), eq(stages.isDeleted, false)));
+        const stageMap = new Map<string, string>();
+        existingStagesInDept.forEach(st => {
+          stageMap.set(String(st.yearNumber), st.id);
+          stageMap.set(st.nameAr, st.id);
+          stageMap.set(st.id, st.id);
+        });
+
+        for (const stg of stagesInput) {
+          const yearNum = Number(stg.yearNumber || stg['المرحلة'] || 1);
+          if (!stageMap.has(String(yearNum))) {
+            const stgId = generateId('stg');
+            await tx.insert(stages).values({
+              id: stgId,
+              departmentId: targetDeptId,
+              nameAr: stg.nameAr || `المرحلة ${yearNum}`,
+              nameEn: stg.nameEn || `Stage ${yearNum}`,
+              yearNumber: yearNum,
+              status: 'active',
+              isDeleted: false,
+            }).run();
+            stageMap.set(String(yearNum), stgId);
+            stageMap.set(stg.nameAr || `المرحلة ${yearNum}`, stgId);
+            createdStats.stages++;
+          }
+        }
+
+        const existingSectionsInDept = await tx.select().from(sections).where(and(eq(sections.departmentId, targetDeptId), eq(sections.isDeleted, false)));
+        const sectionMap = new Map<string, string>();
+        existingSectionsInDept.forEach(sec => {
+          sectionMap.set(`${sec.stageId}_${sec.name.toUpperCase()}`, sec.id);
+          sectionMap.set(sec.id, sec.id);
+        });
+
+        for (const sec of sectionsInput) {
+          const stageKey = String(sec.stageNumber || sec.stageYear || sec['المرحلة'] || 1);
+          const stgId = stageMap.get(stageKey) || existingStagesInDept[0]?.id;
+          const secName = String(sec.name || sec['اسم الشعبة'] || 'A').trim().toUpperCase();
+          const lookupKey = `${stgId}_${secName}`;
+          if (stgId && !sectionMap.has(lookupKey)) {
+            const secId = generateId('sec');
+            await tx.insert(sections).values({
+              id: secId,
+              departmentId: targetDeptId,
+              stageId: stgId,
+              name: secName,
+              studentCount: Number(sec.studentCount || sec['عدد الطلاب'] || 40),
+              status: 'active',
+              isDeleted: false,
+            }).run();
+            sectionMap.set(lookupKey, secId);
+            sectionMap.set(secName, secId);
+            createdStats.sections++;
+          }
+        }
+
+        const existingFacultyInDept = await tx.select().from(faculties).where(and(eq(faculties.departmentId, targetDeptId), eq(faculties.isDeleted, false)));
+        const facultyMap = new Map<string, string>();
+        existingFacultyInDept.forEach(f => {
+          facultyMap.set(f.email.toLowerCase(), f.id);
+          if (f.employeeId) facultyMap.set(f.employeeId.toUpperCase(), f.id);
+          facultyMap.set(f.nameAr, f.id);
+          facultyMap.set(f.id, f.id);
+        });
+
+        for (const fac of facultyInput) {
+          const email = String(fac.email || fac['البريد الإلكتروني'] || '').trim().toLowerCase();
+          const nameAr = String(fac.nameAr || fac.name || fac['اسم التدريسي'] || '').trim();
+          const empId = String(fac.employeeId || fac['الرقم الوظيفي'] || '').trim().toUpperCase();
+          if (nameAr && (!email || !facultyMap.has(email))) {
+            const facId = generateId('fac');
+            const targetCollegeId = targetDept?.collegeId || allCols[0]?.id || 'col-eng';
+            await tx.insert(faculties).values({
+              id: facId,
+              collegeId: targetCollegeId,
+              departmentId: targetDeptId,
+              nameAr,
+              nameEn: fac.nameEn || nameAr,
+              academicTitle: fac.academicTitle || fac['اللقب العلمي'] || 'مدرس',
+              specialization: fac.specialization || fac['التخصص'] || '',
+              email: email || `${(empId || generateId('f')).toLowerCase()}@uomus.edu.iq`,
+              phone: fac.phone || fac['رقم الهاتف'] || '',
+              employeeId: empId || generateId('EMP'),
+              status: 'active',
+              isDeleted: false,
+            }).run();
+            if (email) facultyMap.set(email, facId);
+            facultyMap.set(nameAr, facId);
+            createdStats.faculty++;
+          }
+        }
+
+        const existingSubjectsInDept = await tx.select().from(subjects).where(and(eq(subjects.departmentId, targetDeptId), eq(subjects.isDeleted, false)));
+        const subjectMap = new Map<string, string>();
+        existingSubjectsInDept.forEach(s => {
+          subjectMap.set(s.code.toUpperCase(), s.id);
+          subjectMap.set(s.nameAr, s.id);
+          subjectMap.set(s.id, s.id);
+        });
+
+        for (const subj of subjectsInput) {
+          const code = String(subj.code || subj['رمز المادة'] || '').trim().toUpperCase();
+          const nameAr = String(subj.nameAr || subj.name || subj['اسم المادة'] || '').trim();
+          const stageKey = String(subj.stageNumber || subj['المرحلة'] || 1);
+          const stgId = stageMap.get(stageKey) || existingStagesInDept[0]?.id;
+          if (nameAr && code && !subjectMap.has(code)) {
+            const subjId = generateId('subj');
+            await tx.insert(subjects).values({
+              id: subjId,
+              departmentId: targetDeptId,
+              stageId: stgId || 'stg-1',
+              code,
+              nameAr,
+              nameEn: subj.nameEn || nameAr,
+              type: subj.type || 'theoretical',
+              theoreticalHours: Number(subj.theoreticalHours || subj['ساعات نظري'] || 2),
+              practicalHours: Number(subj.practicalHours || subj['ساعات عملي'] || 0),
+              creditUnits: Number(subj.creditUnits || subj['الوحدات'] || 3),
+              status: 'active',
+              isDeleted: false,
+            }).run();
+            subjectMap.set(code, subjId);
+            subjectMap.set(nameAr, subjId);
+            createdStats.subjects++;
+          }
+        }
+
+        const currentTerm = await getCurrentTerm().catch(() => ({ academicYear: '2024-2025', semester: 'FIRST' as const }));
+        for (const sch of schedulesInput) {
+          const day = String(sch.day || sch['اليوم'] || '').trim();
+          const startTime = String(sch.startTime || sch['وقت البدء'] || '').trim();
+          const endTime = String(sch.endTime || sch['وقت الانتهاء'] || '').trim();
+          const subjRef = String(sch.subjectCode || sch.subjectName || sch['المادة'] || '').trim();
+          const facRef = String(sch.facultyEmail || sch.facultyName || sch['التدريسي'] || '').trim();
+          const roomRef = String(sch.roomCode || sch.roomName || sch['القاعة'] || '').trim().toUpperCase();
+          const stageRef = String(sch.stageNumber || sch['المرحلة'] || 1);
+
+          const subjId = subjectMap.get(subjRef.toUpperCase()) || subjectMap.get(subjRef);
+          const facId = facultyMap.get(facRef.toLowerCase()) || facultyMap.get(facRef);
+          const roomId = allRooms.find(r => r.code.toUpperCase() === roomRef || r.id === roomRef)?.id || allRooms[0]?.id;
+          const stgId = stageMap.get(stageRef);
+
+          const secRef = String(sch.sectionNames || sch.sectionName || sch['الشعبة'] || 'A').trim().toUpperCase();
+          const targetCollegeId = targetDept?.collegeId || allCols[0]?.id || 'col-eng';
+          const secId = sectionMap.get(`${stgId}_${secRef}`) || sectionMap.get(secRef) || (existingSectionsInDept[0]?.id) || 'sec-1';
+
+          if (day && startTime && endTime && subjId && facId && roomId && stgId) {
+            const schId = generateId('sch');
+            await tx.insert(schedules).values({
+              id: schId,
+              collegeId: targetCollegeId,
+              departmentId: targetDeptId,
+              stageId: stgId,
+              sectionId: secId,
+              subjectId: subjId,
+              facultyId: facId,
+              roomId: roomId,
+              day,
+              startTime,
+              endTime,
+              academicYear: sch.academicYear || currentTerm.academicYear,
+              semester: sch.semester || currentTerm.semester,
+              lectureType: sch.lectureType || 'theoretical',
+              status: 'ACTIVE',
+              isDeleted: false,
+            }).run();
+            createdStats.schedules++;
+          }
+        }
+
+        await tx.insert(auditLogs).values({
+          id: generateId('audit'),
+          userId: user.id,
+          userName: user.name,
+          userRole: user.role,
+          action: 'IMPORT_DATA',
+          entity: 'department_package',
+          entityId: targetDeptId,
+          reason: `استيراد حزمة Excel شاملة لقسم ${targetDept?.nameAr || deptInput.nameAr}`,
+        }).run();
+      });
+
+      res.status(201).json({
+        success: true,
+        stats: createdStats,
+        message: 'تم استيراد حزمة القسم الأكاديمي بنجاح تام من ملف Excel وبمعاملة ذرية آمنة'
+      });
+    } catch (err: any) {
+      console.error('Department package import error:', err);
+      res.status(500).json({ success: false, error: 'فشل استيراد حزمة القسم: ' + (err.message || 'Unknown error') });
+    }
+  }
+);
+
+app.get(
+  '/api/export/department-package/:departmentId',
+  authenticateToken,
+  requireRole('OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'),
+  async (req: Request, res: Response) => {
+    try {
+      const { departmentId } = req.params;
+      const user = req.user!;
+      if (user.role === 'DEPARTMENT_MONITOR' && user.assignedDepartmentId !== departmentId) {
+        return res.status(403).json({ success: false, error: 'غير مصرح لك بتصدير بيانات قسم آخر' });
+      }
+
+      const dept = (await db.select().from(departments).where(eq(departments.id, departmentId)).limit(1))[0];
+      if (!dept) {
+        return res.status(404).json({ success: false, error: 'القسم المطلوب غير موجود' });
+      }
+
+      const college = (await db.select().from(colleges).where(eq(colleges.id, dept.collegeId)).limit(1))[0];
+      const deptStages = await db.select().from(stages).where(and(eq(stages.departmentId, departmentId), eq(stages.isDeleted, false))).orderBy(stages.yearNumber);
+      const deptSections = await db.select().from(sections).where(and(eq(sections.departmentId, departmentId), eq(sections.isDeleted, false)));
+      const deptFaculties = await db.select().from(faculties).where(and(eq(faculties.departmentId, departmentId), eq(faculties.isDeleted, false)));
+      const deptSubjects = await db.select().from(subjects).where(and(eq(subjects.departmentId, departmentId), eq(subjects.isDeleted, false)));
+      const deptSchedules = await db.select().from(schedules).where(and(eq(schedules.departmentId, departmentId), eq(schedules.isDeleted, false)));
+      const allRooms = await db.select().from(rooms).where(eq(rooms.isDeleted, false));
+
+      res.json({
+        success: true,
+        department: {
+          ...dept,
+          collegeCode: college?.code || '',
+          collegeNameAr: college?.nameAr || '',
+        },
+        stages: deptStages,
+        sections: deptSections,
+        faculty: deptFaculties,
+        subjects: deptSubjects,
+        schedules: deptSchedules.map(sch => {
+          const subj = deptSubjects.find(s => s.id === sch.subjectId);
+          const fac = deptFaculties.find(f => f.id === sch.facultyId);
+          const rm = allRooms.find(r => r.id === sch.roomId);
+          const stg = deptStages.find(s => s.id === sch.stageId);
+          return {
+            ...sch,
+            subjectCode: subj?.code || '',
+            subjectName: subj?.nameAr || '',
+            facultyName: fac?.nameAr || '',
+            facultyEmail: fac?.email || '',
+            roomCode: rm?.code || '',
+            roomName: rm?.nameAr || '',
+            stageNumber: stg?.yearNumber || 1,
+            stageName: stg?.nameAr || '',
+          };
+        }),
+      });
+    } catch (err: any) {
+      console.error('Export department package error:', err);
+      res.status(500).json({ success: false, error: err.message });
+    }
   }
 );
 
@@ -4485,7 +5252,7 @@ app.get(
         db.select().from(colleges).where(eq(colleges.isDeleted, false)),
         db.select().from(attendanceEvidence).where(eq(attendanceEvidence.lectureDate, targetDate)),
         db.select().from(attendanceRecords).where(eq(attendanceRecords.lectureDate, targetDate)),
-        db.select().from(attendanceSectionRecords).where(eq(attendanceSectionRecords.lectureDate, targetDate)),
+        db.select().from(attendanceSectionRecords),
       ]);
 
       const facMap = new Map(allFaculties.map(f => [f.id, f]));
@@ -4497,7 +5264,11 @@ app.get(
       const termAttendance = allAttendance.filter(record => isSameAcademicTerm(record, term));
       const attendanceMap = new Map(termAttendance.map(a => [`${a.scheduleId}:${a.lectureDate}`, a]));
       const sectionAttendanceMap = new Map<string, typeof allSectionAttendance>();
-      for (const detail of allSectionAttendance) sectionAttendanceMap.set(detail.attendanceId, [...(sectionAttendanceMap.get(detail.attendanceId) || []), detail]);
+      for (const detail of allSectionAttendance) {
+        if (detail.attendanceRecordId) {
+          sectionAttendanceMap.set(detail.attendanceRecordId, [...(sectionAttendanceMap.get(detail.attendanceRecordId) || []), detail]);
+        }
+      }
 
       const termScheduleIds = new Set(allSchedules.filter(schedule => !schedule.isDeleted && isSameAcademicTerm(schedule, term)).map(schedule => schedule.id));
       const reportScheduleIds = new Set([...termScheduleIds, ...termAttendance.map(record => record.scheduleId)]);
@@ -4506,12 +5277,12 @@ app.get(
         const attendance = attendanceMap.get(`${sch.id}:${targetDate}`);
         const sectionDetails = attendance ? (sectionAttendanceMap.get(attendance.id) || []).map(detail => ({
           sectionId: detail.sectionId,
-          sectionName: detail.snapshotSectionName,
-          departmentName: detail.snapshotDepartmentName,
-          stageName: detail.snapshotStageName,
-          studentsEnrolled: detail.studentsEnrolled,
-          studentsPresent: detail.studentsPresent,
-          attendancePercentage: Number(detail.attendancePercentage),
+          sectionName: detail.sectionName,
+          departmentName: detail.departmentName,
+          stageName: detail.stageName,
+          studentsEnrolled: detail.studentCount || 0,
+          studentsPresent: detail.presentCount || 0,
+          attendancePercentage: detail.studentCount ? Number(((detail.presentCount / detail.studentCount) * 100).toFixed(1)) : 0,
         })) : [];
         const fac = facMap.get(sch.facultyId);
         const subj = subjMap.get(sch.subjectId);

@@ -11,37 +11,44 @@ export const LiveMonitoring: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    let interval: any = null;
     async function loadData() {
       setIsLoading(true);
       try {
-        const [scheds, rms, atts, facs] = await Promise.all([
+        const [schedsRes, rmsRes, attsRes, facsRes] = await Promise.allSettled([
           api.getSchedules(),
           api.getRooms(),
           api.getAttendance(),
           api.getFaculties(),
         ]);
-        setSchedules(scheds || []);
-        setRooms(rms || []);
-        setAttendance(atts || []);
-        setFaculty(facs || []);
-      } catch (err) {
-        console.error('Error loading monitoring data:', err);
+        setSchedules(schedsRes.status === 'fulfilled' && Array.isArray(schedsRes.value) ? schedsRes.value : []);
+        setRooms(rmsRes.status === 'fulfilled' && Array.isArray(rmsRes.value) ? rmsRes.value : []);
+        setAttendance(attsRes.status === 'fulfilled' && Array.isArray(attsRes.value) ? attsRes.value : []);
+        setFaculty(facsRes.status === 'fulfilled' && Array.isArray(facsRes.value) ? facsRes.value : []);
+      } catch (err: any) {
+        if (err?.status === 401 && interval) {
+          clearInterval(interval);
+        }
       } finally {
         setIsLoading(false);
       }
     }
     loadData();
-    const interval = setInterval(loadData, 15000);
-    return () => clearInterval(interval);
+    interval = setInterval(loadData, 15000);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, []);
 
   const getFacultyName = (facultyId: string) => {
-    const f = faculty.find((item) => item.id === facultyId);
+    const list = Array.isArray(faculty) ? faculty : [];
+    const f = list.find((item) => item.id === facultyId);
     return f ? f.nameAr : 'غير محدد';
   };
 
   const getRoomName = (roomId: string) => {
-    const r = rooms.find((item) => item.id === roomId);
+    const list = Array.isArray(rooms) ? rooms : [];
+    const r = list.find((item) => item.id === roomId);
     return r ? `${r.nameAr} (${r.code || ''})` : 'قاعة غير محددة';
   };
 

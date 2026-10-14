@@ -1,0 +1,135 @@
+{
+  "departmentId": "dept-cpe",
+  "collegeId": "col-eng",
+  "stageId": "stage-cpe-1",
+  "subjects": [
+    {
+      "code": "CPE101",
+      "nameAr": "برمجة الحاسوب 1",
+      "nameEn": "Computer Programming 1",
+      "type": "theoretical",
+      "theoreticalHours": 2,
+      "practicalHours": 2,
+      "creditUnits": 3
+    },
+    {
+      "code": "CPE102",
+      "nameAr": "تراكيب البيانات",
+      "nameEn": "Data Structures",
+      "type": "practical",
+      "theoreticalHours": 2,
+      "practicalHours": 2,
+      "creditUnits": 3
+    },
+    {
+      "code": "CPE103",
+      "nameAr": "شبكات الحاسوب",
+      "nameEn": "Computer Networks",
+      "type": "theoretical",
+      "theoreticalHours": 2,
+      "practicalHours": 2,
+      "creditUnits": 3
+    }
+  ],
+  "sections": [
+    {
+      "name": "أ",
+      "studentCount": 45
+    },
+    {
+      "name": "ب",
+      "studentCount": 40
+    }
+  ],
+  "faculty": [
+    {
+      "employeeId": "EMP-CPE-01",
+      "nameAr": "د. حيدر عباس",
+      "nameEn": "Dr. Haider Abbas",
+      "academicTitle": "أستاذ مساعد",
+      "specialization": "هندسة حاسوب",
+      "email": "haider.abbas@uomus.edu.iq",
+      "phone": "+9647801112233"
+    },
+    {
+      "employeeId": "EMP-CPE-02",
+      "nameAr": "م.م. زينب مهدي",
+      "nameEn": "Zainab Mehdi",
+      "academicTitle": "مدرس مساعد",
+      "specialization": "علوم حاسوب",
+      "email": "zainab.mehdi@uomus.edu.iq",
+      "phone": "+9647802223344"
+    },
+    {
+      "employeeId": "EMP-CPE-03",
+      "nameAr": "د. مصطفى حميد",
+      "nameEn": "Dr. Mustafa Hameed",
+      "academicTitle": "أستاذ",
+      "specialization": "شبكات",
+      "email": "mustafa.hameed@uomus.edu.iq",
+      "phone": "+9647803334455"
+    }
+  ],
+  "schedules": [
+    {
+      "subjectCode": "CPE101",
+      "facultyEmail": "haider.abbas@uomus.edu.iq",
+      "sectionName": "أ",
+      "roomCode": "HALL-101",
+      "day": "Sunday",
+      "startTime": "08:30",
+      "endTime": "10:30",
+      "lectureType": "theoretical"
+    },
+    {
+      "subjectCode": "CPE101",
+      "facultyEmail": "haider.abbas@uomus.edu.iq",
+      "sectionName": "ب",
+      "roomCode": "HALL-102",
+      "day": "Sunday",
+      "startTime": "10:30",
+      "endTime": "12:30",
+      "lectureType": "theoretical"
+    },
+    {
+      "subjectCode": "CPE102",
+      "facultyEmail": "zainab.mehdi@uomus.edu.iq",
+      "sectionName": "أ",
+      "roomCode": "LAB-201",
+      "day": "Monday",
+      "startTime": "08:30",
+      "endTime": "11:30",
+      "lectureType": "practical"
+    },
+    {
+      "subjectCode": "CPE102",
+      "facultyEmail": "zainab.mehdi@uomus.edu.iq",
+      "sectionName": "ب",
+      "roomCode": "LAB-201",
+      "day": "Monday",
+      "startTime": "11:30",
+      "endTime": "14:30",
+      "lectureType": "practical"
+    },
+    {
+      "subjectCode": "CPE103",
+      "facultyEmail": "mustafa.hameed@uomus.edu.iq",
+      "sectionName": "أ",
+      "roomCode": "HALL-101",
+      "day": "Tuesday",
+      "startTime": "08:30",
+      "endTime": "10:30",
+      "lectureType": "theoretical"
+    },
+    {
+      "subjectCode": "CPE103",
+      "facultyEmail": "mustafa.hameed@uomus.edu.iq",
+      "sectionName": "ب",
+      "roomCode": "HALL-102",
+      "day": "Tuesday",
+      "startTime": "10:30",
+      "endTime": "12:30",
+      "lectureType": "theoretical"
+    }
+  ]
+}

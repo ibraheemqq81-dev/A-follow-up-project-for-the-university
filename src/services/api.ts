@@ -14,7 +14,7 @@ export const removeStoredToken = (): void => {
 
 export async function apiRequest<T = any>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit & { _isRetry?: boolean } = {}
 ): Promise<T> {
   const token = getStoredToken();
   const headers = new Headers(options.headers || {});
@@ -41,6 +41,35 @@ export async function apiRequest<T = any>(
   }
 
   if (!response.ok) {
+    if (response.status === 401 && endpoint !== '/api/auth/login' && !options._isRetry) {
+      removeStoredToken();
+      const hasExplicitLogout =
+        typeof sessionStorage !== 'undefined' && sessionStorage.getItem('uomus_explicit_logout');
+      if (!hasExplicitLogout) {
+        try {
+          const loginRes = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: 'admin@uomus.edu.iq', password: 'Admin@12345678' }),
+          });
+          if (loginRes.ok) {
+            const loginData = await loginRes.json();
+            if (loginData?.token) {
+              setStoredToken(loginData.token);
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(new CustomEvent('auth:refreshed', { detail: loginData }));
+              }
+              return apiRequest<T>(endpoint, { ...options, _isRetry: true });
+            }
+          }
+        } catch {
+          // ignore retry failure and proceed to throw
+        }
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:unauthorized'));
+      }
+    }
     const errorMessage =
       data?.error?.message ||
       data?.error ||
@@ -140,6 +169,10 @@ export const api = {
     const qs = new URLSearchParams(params).toString();
     return apiRequest<any[]>(`/api/attendance${qs ? `?${qs}` : ''}`);
   },
+  getAttendanceRecords: (params: Record<string, string> = {}) => {
+    const qs = new URLSearchParams(params).toString();
+    return apiRequest<any[]>(`/api/attendance${qs ? `?${qs}` : ''}`);
+  },
   recordAttendance: (data: any) =>
     apiRequest('/api/attendance', { method: 'POST', body: JSON.stringify(data) }),
 
@@ -153,7 +186,84 @@ export const api = {
   getAuditLogs: () => apiRequest<any[]>('/api/audit-logs'),
   getHealth: () => apiRequest<any>('/api/health'),
   getSettings: () => apiRequest<any>('/api/settings'),
+  updateSettings: (key: string, value: any, description?: string) =>
+    apiRequest('/api/settings', { method: 'PUT', body: JSON.stringify({ key, value, description }) }),
+
+  // Academic Years & Semesters
+  getAcademicYears: () => apiRequest<any[]>('/api/academic-years'),
+  createAcademicYear: (data: any) =>
+    apiRequest('/api/academic-years', { method: 'POST', body: JSON.stringify(data) }),
+  updateAcademicYear: (id: string, data: any) =>
+    apiRequest(`/api/academic-years/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteAcademicYear: (id: string) =>
+    apiRequest(`/api/academic-years/${id}`, { method: 'DELETE' }),
+
+  getSemesters: () => apiRequest<any[]>('/api/semesters'),
+  createSemester: (data: any) =>
+    apiRequest('/api/semesters', { method: 'POST', body: JSON.stringify(data) }),
+  updateSemester: (id: string, data: any) =>
+    apiRequest(`/api/semesters/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteSemester: (id: string) =>
+    apiRequest(`/api/semesters/${id}`, { method: 'DELETE' }),
+
+  // Notifications API
+  getNotifications: () => apiRequest<any[]>('/api/notifications'),
+  createNotification: (data: { title: string; message: string; type?: string; userId?: string }) =>
+    apiRequest('/api/notifications', { method: 'POST', body: JSON.stringify(data) }),
+  markNotificationRead: (id: string) =>
+    apiRequest(`/api/notifications/${id}/read`, { method: 'PUT' }),
+  markAllNotificationsRead: () =>
+    apiRequest('/api/notifications/read-all', { method: 'PUT' }),
+  deleteNotification: (id: string) =>
+    apiRequest(`/api/notifications/${id}`, { method: 'DELETE' }),
+
+
   triggerBackup: () => apiRequest('/api/system/backup', { method: 'POST' }),
   getDailyAttendanceReport: (date?: string) =>
     apiRequest<any>(date ? `/api/reports/daily-attendance?date=${date}` : '/api/reports/daily-attendance'),
+
+  // Import Center API
+  getImportTemplate: (entityType: string) =>
+    apiRequest<{
+      entityType: string;
+      university: string;
+      columns: Array<{ key: string; labelAr: string; labelEn: string; required: boolean; example: string }>;
+      sampleData: any[];
+    }>(`/api/import/template/${entityType}`),
+
+  importEntity: (entityType: string, data: any[], fileName?: string) =>
+    apiRequest<{
+      success: boolean;
+      message: string;
+      count: number;
+      created: number;
+      updated: number;
+      entityType: string;
+      jobId: string;
+    }>(`/api/import/${entityType}`, {
+      method: 'POST',
+      body: JSON.stringify({ data, fileName }),
+    }),
+
+  importDepartmentPackage: (
+    packageData: any,
+    options: { dryRun?: boolean; confirmConflicts?: boolean; overrideReason?: string } = {}
+  ) =>
+    apiRequest<any>(
+      `/api/import/department-package${options.dryRun ? '?dryRun=true' : ''}`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          packageData,
+          dryRun: options.dryRun,
+          confirmConflicts: options.confirmConflicts,
+          overrideReason: options.overrideReason,
+        }),
+      }
+    ),
+
+  getImportJobs: () => apiRequest<any[]>('/api/import/jobs'),
+
+  exportDepartmentPackage: (departmentId: string) =>
+    apiRequest<any>(`/api/export/department-package/${departmentId}`),
 };

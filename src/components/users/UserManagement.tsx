@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api.ts';
-import { UserCheck, Plus, Trash2, Shield, Mail, CheckCircle2, AlertCircle } from 'lucide-react';
+import { UserCheck, Plus, Trash2, Shield, Mail, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 
 export const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [colleges, setColleges] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Search & Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDepartmentId, setFilterDepartmentId] = useState('');
+  const [filterDate, setFilterDate] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form, setForm] = useState({
@@ -23,16 +28,16 @@ export const UserManagement: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [uRes, colRes, depRes] = await Promise.all([
+      const [uRes, colRes, depRes] = await Promise.allSettled([
         api.getUsers(),
         api.getColleges(),
         api.getDepartments(),
       ]);
-      setUsers(uRes || []);
-      setColleges(colRes || []);
-      setDepartments(depRes || []);
-    } catch (err) {
-      console.error(err);
+      setUsers(uRes.status === 'fulfilled' ? uRes.value || [] : []);
+      setColleges(colRes.status === 'fulfilled' ? colRes.value || [] : []);
+      setDepartments(depRes.status === 'fulfilled' ? depRes.value || [] : []);
+    } catch {
+      // safe fallback
     } finally {
       setIsLoading(false);
     }
@@ -103,6 +108,25 @@ export const UserManagement: React.FC = () => {
   const getCollegeName = (id?: string) => colleges.find((c) => c.id === id)?.nameAr || '';
   const getDeptName = (id?: string) => departments.find((d) => d.id === id)?.nameAr || '';
 
+  // Filtered Users List
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const matchSearch =
+        !searchTerm ||
+        u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        u.role?.toLowerCase().includes(searchTerm.toLowerCase());
+
+      const matchDept = !filterDepartmentId || u.assignedDepartmentId === filterDepartmentId;
+
+      const matchDate =
+        !filterDate ||
+        (u.createdAt && u.createdAt.startsWith(filterDate));
+
+      return matchSearch && matchDept && matchDate;
+    });
+  }, [users, searchTerm, filterDepartmentId, filterDate]);
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
@@ -121,11 +145,62 @@ export const UserManagement: React.FC = () => {
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-xs"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             إنشاء حساب جديد
           </button>
+        </div>
+
+        {/* Search & Filters Toolbar */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3.5" />
+            <input
+              type="text"
+              placeholder="البحث بالاسم، البريد، أو الصلاحية..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-3 pr-9 py-2.5 rounded-xl border border-slate-300 text-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div>
+            <select
+              value={filterDepartmentId}
+              onChange={(e) => setFilterDepartmentId(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-300 text-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value="">جميع الأقسام الأكاديمية</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.nameAr}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-300 text-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              title="تصفية حسب تاريخ الإنشاء"
+            />
+            {(searchTerm || filterDepartmentId || filterDate) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterDepartmentId('');
+                  setFilterDate('');
+                }}
+                className="px-3 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium shrink-0 cursor-pointer"
+                title="إعادة ضبط الفلاتر"
+              >
+                إعادة ضبط
+              </button>
+            )}
+          </div>
         </div>
 
         {message && (
@@ -147,6 +222,10 @@ export const UserManagement: React.FC = () => {
 
         {isLoading ? (
           <div className="py-16 text-center text-slate-400 text-sm">جاري التحميل...</div>
+        ) : filteredUsers.length === 0 ? (
+          <div className="py-16 text-center text-slate-400 text-sm">
+            لا توجد نتائج مطابقة لبحثك أو الفلاتر المحددة.
+          </div>
         ) : (
           <div className="mt-6 overflow-x-auto">
             <table className="w-full text-right text-xs">
@@ -161,7 +240,7 @@ export const UserManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {users.map((u) => (
+                {filteredUsers.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/70">
                     <td className="py-3.5 px-4 font-semibold text-slate-900">{u.name}</td>
                     <td className="py-3.5 px-4 font-mono text-slate-500">{u.email}</td>
@@ -180,7 +259,8 @@ export const UserManagement: React.FC = () => {
                       {u.role !== 'OWNER' && (
                         <button
                           onClick={() => handleDelete(u.id)}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50"
+                          className="text-slate-400 hover:text-red-600 p-1 cursor-pointer"
+                          title="حذف الحساب"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
@@ -197,94 +277,92 @@ export const UserManagement: React.FC = () => {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-bold text-slate-900 text-base mb-4">إنشاء حساب جديد</h3>
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-slate-100">
+            <h3 className="font-bold text-slate-900 text-base mb-4">إنشاء حساب جديد والصلاحيات</h3>
             <form onSubmit={handleCreate} className="space-y-4 text-xs">
               <div>
-                <label className="block font-medium text-slate-700 mb-1">الاسم الكامل</label>
+                <label className="block font-medium text-slate-700 mb-1">اسم المستخدم الكامل</label>
                 <input
                   type="text"
                   required
-                  placeholder="د. أحمد علي السعدي"
+                  placeholder="مثال: د. أحمد عبد الله"
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-slate-300"
                 />
               </div>
 
-              <div>
-                <label className="block font-medium text-slate-700 mb-1">البريد الإلكتروني</label>
-                <input
-                  type="email"
-                  required
-                  dir="ltr"
-                  placeholder="user@uomus.edu.iq"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border border-slate-300"
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">البريد الإلكتروني</label>
+                  <input
+                    type="email"
+                    required
+                    dir="ltr"
+                    placeholder="ahmed@uomus.edu.iq"
+                    value={form.email}
+                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300"
+                  />
+                </div>
+                <div>
+                  <label className="block font-medium text-slate-700 mb-1">كلمة المرور (12 خانة على الأقل)</label>
+                  <input
+                    type="password"
+                    required
+                    dir="ltr"
+                    placeholder="••••••••••••"
+                    value={form.password}
+                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    className="w-full p-2.5 rounded-xl border border-slate-300"
+                  />
+                </div>
               </div>
 
               <div>
-                <label className="block font-medium text-slate-700 mb-1">
-                  كلمة المرور (12 خانة على الأقل)
-                </label>
-                <input
-                  type="password"
-                  required
-                  dir="ltr"
-                  placeholder="••••••••••••"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  className="w-full p-2.5 rounded-xl border border-slate-300"
-                />
-              </div>
-
-              <div>
-                <label className="block font-medium text-slate-700 mb-1">الدور والصلاحية</label>
+                <label className="block font-medium text-slate-700 mb-1">الدور والصلاحية الأكاديمية</label>
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-slate-300"
                 >
-                  <option value="COLLEGE_MONITOR">مسؤول متابعة كلية</option>
-                  <option value="DEPARTMENT_MONITOR">مسؤول متابعة قسم</option>
-                  <option value="FACULTY">أستاذ تدريسي</option>
-                  <option value="OWNER">مالك النظام (الجامعة)</option>
+                  <option value="COLLEGE_MONITOR">مسؤول كلية (College Monitor)</option>
+                  <option value="DEPARTMENT_MONITOR">مسؤول قسم (Department Monitor)</option>
+                  <option value="FACULTY">عضو هيئة تدريس (Faculty Member)</option>
+                  <option value="OWNER">مالك الجامعة (System Owner)</option>
                 </select>
               </div>
 
               {form.role !== 'OWNER' && (
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">الكلية المعين لها</label>
-                  <select
-                    value={form.assignedCollegeId}
-                    onChange={(e) => setForm({ ...form, assignedCollegeId: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-300"
-                  >
-                    <option value="">-- اختر الكلية --</option>
-                    {colleges.map((c) => (
-                      <option key={c.id} value={c.id}>{c.nameAr}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-
-              {form.role === 'DEPARTMENT_MONITOR' && (
-                <div>
-                  <label className="block font-medium text-slate-700 mb-1">القسم المعين له</label>
-                  <select
-                    value={form.assignedDepartmentId}
-                    onChange={(e) => setForm({ ...form, assignedDepartmentId: e.target.value })}
-                    className="w-full p-2.5 rounded-xl border border-slate-300"
-                  >
-                    <option value="">-- اختر القسم --</option>
-                    {departments
-                      .filter((d) => !form.assignedCollegeId || d.collegeId === form.assignedCollegeId)
-                      .map((d) => (
-                        <option key={d.id} value={d.id}>{d.nameAr}</option>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">الكلية المعينة</label>
+                    <select
+                      value={form.assignedCollegeId}
+                      onChange={(e) => setForm({ ...form, assignedCollegeId: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-slate-300"
+                    >
+                      <option value="">-- اختر الكلية --</option>
+                      {colleges.map((c) => (
+                        <option key={c.id} value={c.id}>{c.nameAr}</option>
                       ))}
-                  </select>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-slate-700 mb-1">القسم المعين</label>
+                    <select
+                      value={form.assignedDepartmentId}
+                      onChange={(e) => setForm({ ...form, assignedDepartmentId: e.target.value })}
+                      className="w-full p-2.5 rounded-xl border border-slate-300"
+                    >
+                      <option value="">-- اختر القسم --</option>
+                      {departments
+                        .filter((d) => !form.assignedCollegeId || d.collegeId === form.assignedCollegeId)
+                        .map((d) => (
+                          <option key={d.id} value={d.id}>{d.nameAr}</option>
+                        ))}
+                    </select>
+                  </div>
                 </div>
               )}
 
@@ -292,13 +370,13 @@ export const UserManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100"
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 cursor-pointer"
                 >
                   إنشاء الحساب
                 </button>

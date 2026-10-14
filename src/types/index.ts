@@ -166,3 +166,21 @@ export interface AuditLog {
   details?: string;
   timestamp?: string;
 }
+
+export interface AppNotification {
+  id: string;
+  userId?: string;
+  title: string;
+  message: string;
+  type?: 'lecture_reminder' | 'attendance' | 'system' | 'alert' | string;
+  scheduleId?: string;
+  roomId?: string;
+  roomName?: string;
+  subjectName?: string;
+  startTime?: string;
+  endTime?: string;
+  minutesRemaining?: number;
+  isRead?: boolean;
+  createdAt?: string;
+}
+

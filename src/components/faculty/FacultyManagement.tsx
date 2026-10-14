@@ -1,12 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api.ts';
-import { Users, Plus, Trash2, Mail, Phone, Award, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Users, Plus, Trash2, Mail, Phone, Award, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 
 export const FacultyManagement: React.FC = () => {
   const [faculty, setFaculty] = useState<any[]>([]);
   const [colleges, setColleges] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Search & Filter States
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDepartmentId, setFilterDepartmentId] = useState('');
+  const [filterDate, setFilterDate] = useState('');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [form, setForm] = useState({
@@ -26,19 +31,22 @@ export const FacultyManagement: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [fac, col, dep] = await Promise.all([
+      const [facRes, colRes, depRes] = await Promise.allSettled([
         api.getFaculties(),
         api.getColleges(),
         api.getDepartments(),
       ]);
-      setFaculty(fac || []);
-      setColleges(col || []);
-      setDepartments(dep || []);
-      if (col && col.length > 0 && !form.collegeId) {
+      const fac = facRes.status === 'fulfilled' && Array.isArray(facRes.value) ? facRes.value : [];
+      const col = colRes.status === 'fulfilled' && Array.isArray(colRes.value) ? colRes.value : [];
+      const dep = depRes.status === 'fulfilled' && Array.isArray(depRes.value) ? depRes.value : [];
+      setFaculty(fac);
+      setColleges(col);
+      setDepartments(dep);
+      if (col.length > 0 && !form.collegeId) {
         setForm((prev) => ({ ...prev, collegeId: col[0].id }));
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // safe fallback
     } finally {
       setIsLoading(false);
     }
@@ -84,6 +92,27 @@ export const FacultyManagement: React.FC = () => {
   const getDeptName = (id?: string) => departments.find((d) => d.id === id)?.nameAr || '';
   const getCollegeName = (id?: string) => colleges.find((c) => c.id === id)?.nameAr || '';
 
+  // Filtered Faculty List
+  const filteredFaculty = useMemo(() => {
+    return faculty.filter((f) => {
+      const matchSearch =
+        !searchTerm ||
+        f.nameAr?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        f.nameEn?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        f.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        f.specialization?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        f.phone?.includes(searchTerm);
+
+      const matchDept = !filterDepartmentId || f.departmentId === filterDepartmentId;
+
+      const matchDate =
+        !filterDate ||
+        (f.createdAt && f.createdAt.startsWith(filterDate));
+
+      return matchSearch && matchDept && matchDate;
+    });
+  }, [faculty, searchTerm, filterDepartmentId, filterDate]);
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
@@ -102,11 +131,62 @@ export const FacultyManagement: React.FC = () => {
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-xs"
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-xs cursor-pointer"
           >
             <Plus className="w-4 h-4" />
             إضافة تدريسي جديد
           </button>
+        </div>
+
+        {/* Search & Filters Toolbar */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-200">
+          <div className="relative">
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3.5" />
+            <input
+              type="text"
+              placeholder="البحث بالاسم، البريد، أو التخصص..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full pl-3 pr-9 py-2.5 rounded-xl border border-slate-300 text-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div>
+            <select
+              value={filterDepartmentId}
+              onChange={(e) => setFilterDepartmentId(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-300 text-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+            >
+              <option value="">جميع الأقسام الأكاديمية</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.nameAr}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              className="w-full p-2.5 rounded-xl border border-slate-300 text-xs bg-white focus:outline-hidden focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+              title="تصفية حسب تاريخ التسجيل"
+            />
+            {(searchTerm || filterDepartmentId || filterDate) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm('');
+                  setFilterDepartmentId('');
+                  setFilterDate('');
+                }}
+                className="px-3 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-medium shrink-0 cursor-pointer"
+                title="إعادة ضبط الفلاتر"
+              >
+                إعادة ضبط
+              </button>
+            )}
+          </div>
         </div>
 
         {message && (
@@ -128,13 +208,13 @@ export const FacultyManagement: React.FC = () => {
 
         {isLoading ? (
           <div className="py-16 text-center text-slate-400 text-sm">جاري التحميل...</div>
-        ) : faculty.length === 0 ? (
+        ) : filteredFaculty.length === 0 ? (
           <div className="py-16 text-center text-slate-400 text-sm">
-            لا يوجد تدريسيون مسجلون حالياً. أضف أساتذة للبدء في توزيع الجداول وتسجيل الحضور.
+            لا توجد نتائج مطابقة لبحثك أو الفلاتر المحددة.
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
-            {faculty.map((f) => (
+            {filteredFaculty.map((f) => (
               <div
                 key={f.id}
                 className="p-5 rounded-2xl border border-slate-200 bg-white hover:border-emerald-300 transition-all shadow-xs flex flex-col justify-between"
@@ -147,7 +227,7 @@ export const FacultyManagement: React.FC = () => {
                     </span>
                     <button
                       onClick={() => handleDelete(f.id)}
-                      className="text-slate-400 hover:text-red-600 p-1"
+                      className="text-slate-400 hover:text-red-600 p-1 cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -288,13 +368,13 @@ export const FacultyManagement: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100"
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
                   إلغاء
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700"
+                  className="px-5 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700 cursor-pointer"
                 >
                   إضافة
                 </button>

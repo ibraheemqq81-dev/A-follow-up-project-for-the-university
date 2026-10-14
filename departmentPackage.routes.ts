@@ -1,5 +1,5 @@
-import { Express, Request, Response } from 'express';
-import { processDepartmentPackage, DepartmentPackagePayload } from './departmentPackage.logic.ts';
+import type { Express, Request, Response } from 'express';
+import { processDepartmentPackage, type DepartmentPackagePayload } from './departmentPackage.logic.ts';
 import { db } from './src/db/index.ts';
 import { departments } from './src/db/schema.ts';
 import { eq } from 'drizzle-orm';
@@ -34,18 +34,33 @@ export function registerDepartmentPackageRoutes(app: Express, deps: RouteDepende
         const confirmConflicts = body.confirmConflicts === true || req.query.confirmConflicts === 'true';
         const overrideReason = body.overrideReason || (req.query.overrideReason as string) || '';
 
+        let resolvedDeptId = payload?.departmentId || (payload as any)?.department?.id;
+        if (!resolvedDeptId && payload) {
+          const deptCode = String((payload as any).department?.code || (payload as any).departmentCode || '').trim().toUpperCase();
+          const deptName = String((payload as any).department?.nameAr || (payload as any).departmentName || '').trim();
+          const allDepts = await db.select().from(departments).where(eq(departments.isDeleted, false));
+          const found = allDepts.find(d => 
+            (deptCode && d.code?.toUpperCase() === deptCode) ||
+            (deptName && d.nameAr === deptName)
+          );
+          if (found) resolvedDeptId = found.id;
+        }
+        if (resolvedDeptId && payload) {
+          payload.departmentId = resolvedDeptId;
+        }
+
         if (!payload || !payload.departmentId) {
           return res.status(400).json({
             success: false,
             error: {
               code: 'BAD_REQUEST',
-              message: 'بيانات حزمة القسم ومعرف القسم (departmentId) مطلوبة',
+              message: 'بيانات حزمة القسم ومعرف القسم أو رمزه مطلوبة',
             },
           });
         }
 
         const targetDepartment = (await db.select({ collegeId: departments.collegeId }).from(departments).where(eq(departments.id, payload.departmentId)).limit(1))[0];
-        if (!targetDepartment) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'القسم المحدد غير موجود' } });
+        if (!targetDepartment) return res.status(404).json({ success: false, error: { code: 'NOT_FOUND', message: 'القسم المحدد غير موجود في النظام' } });
         if (payload.collegeId && payload.collegeId !== targetDepartment.collegeId) {
           return res.status(403).json({ success: false, error: { code: 'FORBIDDEN', message: 'الكلية لا تطابق الكلية الفعلية للقسم' } });
         }

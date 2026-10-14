@@ -490,7 +490,7 @@ export async function processDepartmentPackage(
 
       const schId = `sch-${targetDept.id}-${sch.subjectCode}-${refNames.join('-')}-${sch.day}-${sch.startTime.replace(':', '')}`;
 
-      await db.insert(schedules).values({
+      await db.insert(schedules).values([{
         id: schId,
         departmentId: targetDept.id,
         stageId: targetStageId,
@@ -506,11 +506,11 @@ export async function processDepartmentPackage(
         semester: options.semester,
         status: 'active',
         isDeleted: false,
-      }).onConflictDoNothing();
+      }]).onConflictDoNothing();
 
       if (sectionIds.length > 0) {
         await db.insert(scheduleSections).values(
-          sectionIds.map((sid) => ({ scheduleId: schId, sectionId: sid }))
+          sectionIds.map((sid) => ({ id: `ss-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, scheduleId: schId, sectionId: sid }))
         ).onConflictDoNothing();
       }
 

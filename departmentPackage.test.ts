@@ -166,7 +166,21 @@ describe('Department Package Import Suite (15 Test Cases)', () => {
     } as any).onConflictDoNothing();
 
     // Test identities must exist in the isolated database; authentication must not be bypassed.
-    await db.update(users).set({ tokenVersion: 0, mustChangePassword: false, status: 'active' }).where(eq(users.id, 'user-owner'));
+    await db.insert(users).values({
+      id: 'user-owner',
+      uid: 'uid-owner-package-test',
+      email: 'owner@uomus.edu.iq',
+      name: 'أحمد علي السعدي',
+      role: 'OWNER',
+      roleTitleAr: 'مالك النظام',
+      tokenVersion: 0,
+      mustChangePassword: false,
+      passwordHash: '$2b$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy',
+      status: 'active',
+    } as any).onConflictDoUpdate({
+      target: users.id,
+      set: { tokenVersion: 0, mustChangePassword: false, status: 'active', role: 'OWNER' },
+    });
     await db.insert(users).values({
       id: 'user-dept-cpe-monitor',
       uid: 'uid-dept-cpe-monitor-package',
@@ -377,7 +391,7 @@ describe('Department Package Import Suite (15 Test Cases)', () => {
       phone: '+9647809998877',
     }).onConflictDoNothing();
 
-    await db.insert(schedules).values({
+    await db.insert(schedules).values([{
       id: 'sch-conflict-civil-1',
       departmentId: 'dept-civil',
       stageId: 'stage-civil-1',
@@ -391,7 +405,7 @@ describe('Department Package Import Suite (15 Test Cases)', () => {
       lectureType: 'theoretical',
       academicYear: '2026-2027',
       semester: 'FIRST',
-    }).onConflictDoNothing();
+    }]).onConflictDoNothing();
 
     // Now dryRun import package for CPE department
     const res = await apiRequest('POST', '/api/import/department-package', ownerToken, {

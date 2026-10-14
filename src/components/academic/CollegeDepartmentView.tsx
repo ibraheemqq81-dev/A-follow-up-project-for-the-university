@@ -21,17 +21,19 @@ export const CollegeDepartmentView: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [colRes, depRes] = await Promise.all([
+      const [colRes, depRes] = await Promise.allSettled([
         api.getColleges(),
         api.getDepartments(),
       ]);
-      setColleges(colRes || []);
-      setDepartments(depRes || []);
-      if (colRes && colRes.length > 0 && !deptForm.collegeId) {
-        setDeptForm((prev) => ({ ...prev, collegeId: colRes[0].id }));
+      const col = colRes.status === 'fulfilled' ? colRes.value || [] : [];
+      const dep = depRes.status === 'fulfilled' ? depRes.value || [] : [];
+      setColleges(col);
+      setDepartments(dep);
+      if (col.length > 0 && !deptForm.collegeId) {
+        setDeptForm((prev) => ({ ...prev, collegeId: col[0].id }));
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // safe fallback
     } finally {
       setIsLoading(false);
     }

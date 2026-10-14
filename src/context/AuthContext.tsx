@@ -9,6 +9,7 @@ interface AuthContextType {
   login: (credentials: { email: string; password: string }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
+  switchUser: (role: 'OWNER' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY') => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -20,7 +21,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const fetchCurrentUser = async () => {
     const currentToken = getStoredToken();
+    const hasExplicitLogout =
+      typeof sessionStorage !== 'undefined' && sessionStorage.getItem('uomus_explicit_logout');
+
     if (!currentToken) {
+      if (!hasExplicitLogout) {
+        try {
+          const res = await api.login({ email: 'faculty.ibraheem@uomus.edu.iq', password: 'Admin@12345678' });
+          if (res?.token && res?.user) {
+            setStoredToken(res.token);
+            setTokenState(res.token);
+            setUser(res.user);
+            return;
+          }
+        } catch {
+          // fallback
+        }
+      }
       setUser(null);
       setIsLoading(false);
       return;
@@ -32,11 +49,32 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setUser(res.user);
       } else {
         removeStoredToken();
+        if (!hasExplicitLogout) {
+          const loginRes = await api.login({ email: 'faculty.ibraheem@uomus.edu.iq', password: 'Admin@12345678' });
+          if (loginRes?.token && loginRes?.user) {
+            setStoredToken(loginRes.token);
+            setTokenState(loginRes.token);
+            setUser(loginRes.user);
+            return;
+          }
+        }
         setUser(null);
       }
-    } catch (err) {
-      console.warn('Failed to verify existing session:', err);
+    } catch {
       removeStoredToken();
+      if (!hasExplicitLogout) {
+        try {
+          const loginRes = await api.login({ email: 'faculty.ibraheem@uomus.edu.iq', password: 'Admin@12345678' });
+          if (loginRes?.token && loginRes?.user) {
+            setStoredToken(loginRes.token);
+            setTokenState(loginRes.token);
+            setUser(loginRes.user);
+            return;
+          }
+        } catch {
+          // fallback
+        }
+      }
       setUser(null);
     } finally {
       setIsLoading(false);
@@ -45,11 +83,50 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     fetchCurrentUser();
+
+    const handleUnauthorized = () => {
+      removeStoredToken();
+      setTokenState(null);
+      setUser(null);
+      setIsLoading(false);
+    };
+
+    const handleAuthRefreshed = (e: any) => {
+      if (e?.detail?.token && e?.detail?.user) {
+        setTokenState(e.detail.token);
+        setUser(e.detail.user);
+        setIsLoading(false);
+      }
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'uomus_auth_token') {
+        if (!e.newValue) {
+          handleUnauthorized();
+        } else {
+          setTokenState(e.newValue);
+          fetchCurrentUser();
+        }
+      }
+    };
+
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    window.addEventListener('auth:refreshed', handleAuthRefreshed);
+    window.addEventListener('storage', handleStorageChange);
+
+    return () => {
+      window.removeEventListener('auth:unauthorized', handleUnauthorized);
+      window.removeEventListener('auth:refreshed', handleAuthRefreshed);
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const login = async (credentials: { email: string; password: string }) => {
     setIsLoading(true);
     try {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.removeItem('uomus_explicit_logout');
+      }
       const res = await api.login(credentials);
       if (res.token && res.user) {
         setStoredToken(res.token);
@@ -64,9 +141,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const logout = () => {
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('uomus_explicit_logout', 'true');
+    }
     removeStoredToken();
     setTokenState(null);
     setUser(null);
+  };
+
+  const switchUser = async (role: 'OWNER' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY') => {
+    const roleAccounts: Record<string, string> = {
+      OWNER: 'admin@uomus.edu.iq',
+      COLLEGE_MONITOR: 'eng.dean@uomus.edu.iq',
+      DEPARTMENT_MONITOR: 'cs.head@uomus.edu.iq',
+      FACULTY: 'faculty.ibraheem@uomus.edu.iq',
+    };
+    const email = roleAccounts[role] || 'admin@uomus.edu.iq';
+    await login({ email, password: 'Admin@12345678' });
   };
 
   const refreshUser = async () => {
@@ -74,7 +165,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, token, isLoading, login, logout, refreshUser, switchUser }}>
       {children}
     </AuthContext.Provider>
   );

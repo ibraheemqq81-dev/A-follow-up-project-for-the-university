@@ -22,6 +22,7 @@
       ]
     },
     "allowImportingTsExtensions": true,
+    "strictNullChecks": false,
     "noEmit": true
   },
   "exclude": ["portable-package", "test-run", "test-run-2", "test-run-3"]

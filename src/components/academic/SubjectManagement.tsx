@@ -26,19 +26,22 @@ export const SubjectManagement: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [sub, dep, stg] = await Promise.all([
+      const [subRes, depRes, stgRes] = await Promise.allSettled([
         api.getSubjects(),
         api.getDepartments(),
         api.getStages(),
       ]);
-      setSubjects(sub || []);
-      setDepartments(dep || []);
-      setStages(stg || []);
-      if (dep && dep.length > 0 && !form.departmentId) {
+      const sub = subRes.status === 'fulfilled' ? subRes.value || [] : [];
+      const dep = depRes.status === 'fulfilled' ? depRes.value || [] : [];
+      const stg = stgRes.status === 'fulfilled' ? stgRes.value || [] : [];
+      setSubjects(sub);
+      setDepartments(dep);
+      setStages(stg);
+      if (dep.length > 0 && !form.departmentId) {
         setForm((prev) => ({ ...prev, departmentId: dep[0].id }));
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // safe fallback
     } finally {
       setIsLoading(false);
     }

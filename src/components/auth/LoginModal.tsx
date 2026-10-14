@@ -118,10 +118,37 @@ export const LoginModal: React.FC = () => {
               type="button"
               onClick={() => handleQuickLogin('admin@uomus.edu.iq', 'Admin@12345678')}
               disabled={isLoading}
+              className="w-full text-xs text-right py-2 px-3 rounded-lg bg-emerald-50/60 hover:bg-emerald-100/70 border border-emerald-200 text-slate-800 flex justify-between items-center transition-colors"
+            >
+              <span className="font-semibold text-emerald-900">مالك النظام (الجامعة)</span>
+              <span className="text-emerald-700 font-mono text-[11px]">admin@uomus.edu.iq</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickLogin('eng.dean@uomus.edu.iq', 'Admin@12345678')}
+              disabled={isLoading}
               className="w-full text-xs text-right py-2 px-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 flex justify-between items-center transition-colors"
             >
-              <span className="font-semibold text-emerald-800">حساب مالك النظام (الجامعة)</span>
-              <span className="text-slate-400 font-mono">admin@uomus.edu.iq</span>
+              <span className="font-semibold text-slate-800">مراقب كلية الهندسة</span>
+              <span className="text-slate-500 font-mono text-[11px]">eng.dean@uomus.edu.iq</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickLogin('cs.head@uomus.edu.iq', 'Admin@12345678')}
+              disabled={isLoading}
+              className="w-full text-xs text-right py-2 px-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 flex justify-between items-center transition-colors"
+            >
+              <span className="font-semibold text-slate-800">مراقب قسم هندسة الحاسوب</span>
+              <span className="text-slate-500 font-mono text-[11px]">cs.head@uomus.edu.iq</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleQuickLogin('faculty.ibraheem@uomus.edu.iq', 'Admin@12345678')}
+              disabled={isLoading}
+              className="w-full text-xs text-right py-2 px-3 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-700 flex justify-between items-center transition-colors"
+            >
+              <span className="font-semibold text-slate-800">أ.د. إبراهيم (عضو هيئة تدريسية)</span>
+              <span className="text-slate-500 font-mono text-[11px]">faculty.ibraheem@uomus.edu.iq</span>
             </button>
           </div>
         </div>

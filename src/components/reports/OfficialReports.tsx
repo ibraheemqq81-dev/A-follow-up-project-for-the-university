@@ -14,16 +14,16 @@ export const OfficialReports: React.FC = () => {
   const loadReport = async () => {
     setIsLoading(true);
     try {
-      const [daily, att, fac] = await Promise.all([
-        api.getDailyAttendanceReport(reportDate).catch(() => null),
+      const [dailyRes, attRes, facRes] = await Promise.allSettled([
+        api.getDailyAttendanceReport(reportDate),
         api.getAttendance(),
         api.getFaculties(),
       ]);
-      setReportData(daily);
-      setAttendanceRecords(att || []);
-      setFaculty(fac || []);
-    } catch (err) {
-      console.error(err);
+      setReportData(dailyRes.status === 'fulfilled' ? dailyRes.value : null);
+      setAttendanceRecords(attRes.status === 'fulfilled' && Array.isArray(attRes.value) ? attRes.value : []);
+      setFaculty(facRes.status === 'fulfilled' && Array.isArray(facRes.value) ? facRes.value : []);
+    } catch {
+      // safe fallback
     } finally {
       setIsLoading(false);
     }
@@ -37,7 +37,10 @@ export const OfficialReports: React.FC = () => {
     window.print();
   };
 
-  const getFacultyName = (id: string) => faculty.find((f) => f.id === id)?.nameAr || 'تدريسي';
+  const getFacultyName = (id: string) => {
+    const list = Array.isArray(faculty) ? faculty : [];
+    return list.find((f) => f && f.id === id)?.nameAr || 'تدريسي';
+  };
 
   return (
     <div className="space-y-6">

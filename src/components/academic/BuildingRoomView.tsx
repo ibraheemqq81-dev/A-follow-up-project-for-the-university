@@ -29,21 +29,25 @@ export const BuildingRoomView: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [rm, bg, cl, dp] = await Promise.all([
+      const [rmRes, bgRes, clRes, dpRes] = await Promise.allSettled([
         api.getRooms(),
         api.getBuildings(),
         api.getColleges(),
         api.getDepartments(),
       ]);
-      setRooms(rm || []);
-      setBuildings(bg || []);
-      setColleges(cl || []);
-      setDepartments(dp || []);
-      if (bg && bg.length > 0 && !roomForm.buildingId) {
+      const rm = rmRes.status === 'fulfilled' ? rmRes.value || [] : [];
+      const bg = bgRes.status === 'fulfilled' ? bgRes.value || [] : [];
+      const cl = clRes.status === 'fulfilled' ? clRes.value || [] : [];
+      const dp = dpRes.status === 'fulfilled' ? dpRes.value || [] : [];
+      setRooms(rm);
+      setBuildings(bg);
+      setColleges(cl);
+      setDepartments(dp);
+      if (bg.length > 0 && !roomForm.buildingId) {
         setRoomForm((prev) => ({ ...prev, buildingId: bg[0].id }));
       }
-    } catch (err) {
-      console.error(err);
+    } catch {
+      // safe fallback
     } finally {
       setIsLoading(false);
     }
