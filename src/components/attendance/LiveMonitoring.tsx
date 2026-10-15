@@ -1,8 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
 import { Radio, DoorOpen, Users, Clock, CheckCircle2, AlertTriangle, XCircle, Search } from 'lucide-react';
 
 export const LiveMonitoring: React.FC = () => {
+  const { user } = useAuth();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [rooms, setRooms] = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
@@ -15,11 +17,15 @@ export const LiveMonitoring: React.FC = () => {
     async function loadData() {
       setIsLoading(true);
       try {
+        const scheduleParams: Record<string, string> = {};
+        if (user?.role === 'DEPARTMENT_MONITOR' && user.assignedDepartmentId) {
+          scheduleParams.departmentId = user.assignedDepartmentId;
+        }
         const [schedsRes, rmsRes, attsRes, facsRes] = await Promise.allSettled([
-          api.getSchedules(),
+          api.getSchedules(scheduleParams),
           api.getRooms(),
-          api.getAttendance(),
-          api.getFaculties(),
+          api.getAttendance(user?.assignedFacultyId ? { facultyId: user.assignedFacultyId } : {}),
+          api.getFaculties(user?.assignedDepartmentId || undefined),
         ]);
         setSchedules(schedsRes.status === 'fulfilled' && Array.isArray(schedsRes.value) ? schedsRes.value : []);
         setRooms(rmsRes.status === 'fulfilled' && Array.isArray(rmsRes.value) ? rmsRes.value : []);

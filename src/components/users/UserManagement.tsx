@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api.ts';
-import { UserCheck, Plus, Trash2, Shield, Mail, CheckCircle2, AlertCircle, Search } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext.tsx';
+import { UserCheck, Plus, Trash2, Shield, Mail, CheckCircle2, AlertCircle, Search, Clock, XCircle, UserPlus } from 'lucide-react';
 
 export const UserManagement: React.FC = () => {
+  const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<any[]>([]);
   const [colleges, setColleges] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [activeTab, setActiveTab] = useState<'users' | 'pending'>('users');
   const [isLoading, setIsLoading] = useState(true);
 
   // Search & Filter States
@@ -28,14 +32,16 @@ export const UserManagement: React.FC = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [uRes, colRes, depRes] = await Promise.allSettled([
+      const [uRes, colRes, depRes, reqRes] = await Promise.allSettled([
         api.getUsers(),
         api.getColleges(),
         api.getDepartments(),
+        api.getRegistrationRequests('pending_approval'),
       ]);
       setUsers(uRes.status === 'fulfilled' ? uRes.value || [] : []);
       setColleges(colRes.status === 'fulfilled' ? colRes.value || [] : []);
       setDepartments(depRes.status === 'fulfilled' ? depRes.value || [] : []);
+      setPendingRequests(reqRes.status === 'fulfilled' ? reqRes.value || [] : []);
     } catch {
       // safe fallback
     } finally {
@@ -90,6 +96,32 @@ export const UserManagement: React.FC = () => {
     }
   };
 
+  const handleApproveRequest = async (requestId: string) => {
+    if (!currentUser) return;
+    const role = window.prompt('الدور (COLLEGE_MONITOR / DEPARTMENT_MONITOR / FACULTY):', 'FACULTY');
+    if (!role) return;
+    try {
+      await api.approveRegistration(requestId, { id: currentUser.id, name: currentUser.name }, { role });
+      setMessage({ type: 'success', text: 'تمت الموافقة على الحساب وتفعيله بنجاح' });
+      loadData();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'فشل الموافقة على الطلب' });
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    if (!currentUser) return;
+    const reason = window.prompt('سبب الرفض:', '');
+    if (!reason) return;
+    try {
+      await api.rejectRegistration(requestId, { id: currentUser.id, name: currentUser.name }, reason);
+      setMessage({ type: 'success', text: 'تم رفض طلب التسجيل' });
+      loadData();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err?.message || 'فشل رفض الطلب' });
+    }
+  };
+
   const getRoleLabel = (role: string) => {
     switch (role) {
       case 'OWNER':
@@ -127,6 +159,16 @@ export const UserManagement: React.FC = () => {
     });
   }, [users, searchTerm, filterDepartmentId, filterDate]);
 
+  if (currentUser?.role !== 'OWNER') {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 p-8 text-center">
+        <Shield className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+        <h2 className="text-lg font-bold text-slate-700">غير مصرح</h2>
+        <p className="text-sm text-slate-500 mt-1">هذه الصفحة متاحة فقط لمالك النظام</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs">
@@ -152,7 +194,33 @@ export const UserManagement: React.FC = () => {
           </button>
         </div>
 
+        {/* Tabs */}
+        <div className="flex gap-2 mt-6 border-b border-slate-200">
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`px-4 py-2.5 text-xs font-medium border-b-2 transition-colors cursor-pointer ${
+              activeTab === 'users' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            الحسابات الحالية
+          </button>
+          <button
+            onClick={() => setActiveTab('pending')}
+            className={`px-4 py-2.5 text-xs font-medium border-b-2 transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'pending' ? 'border-emerald-600 text-emerald-700' : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" />
+            طلبات التسجيل المعلقة
+            {pendingRequests.length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 text-[10px] font-bold">{pendingRequests.length}</span>
+            )}
+          </button>
+        </div>
+
         {/* Search & Filters Toolbar */}
+        {activeTab === 'users' && (
+        <>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 p-4 rounded-2xl bg-slate-50 border border-slate-200">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute right-3 top-3.5" />
@@ -251,9 +319,13 @@ export const UserManagement: React.FC = () => {
                         : `${getCollegeName(u.assignedCollegeId) || 'عام'} ${u.assignedDepartmentId ? `— ${getDeptName(u.assignedDepartmentId)}` : ''}`}
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium text-[10px]">
-                        نشط
-                      </span>
+                      {u.status === 'inactive' || u.accountStatus === 'suspended' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-red-50 text-red-700 font-medium text-[10px]">معطل</span>
+                      ) : u.accountStatus === 'pending_approval' ? (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium text-[10px]">بانتظار الموافقة</span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium text-[10px]">نشط</span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       {u.role !== 'OWNER' && (
@@ -270,6 +342,62 @@ export const UserManagement: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+        </>
+        )}
+
+        {activeTab === 'pending' && (
+          <div className="mt-6">
+            {isLoading ? (
+              <div className="py-16 text-center text-slate-400 text-sm">جاري التحميل...</div>
+            ) : pendingRequests.length === 0 ? (
+              <div className="py-16 text-center text-slate-400 text-sm">
+                لا توجد طلبات تسجيل معلقة حالياً.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-right text-xs">
+                  <thead className="bg-slate-50 text-slate-600 uppercase font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="py-3 px-4">الاسم</th>
+                      <th className="py-3 px-4">البريد الإلكتروني</th>
+                      <th className="py-3 px-4">الدور المطلوب</th>
+                      <th className="py-3 px-4">تاريخ الطلب</th>
+                      <th className="py-3 px-4 text-center">إجراءات</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-slate-700">
+                    {pendingRequests.map((r) => (
+                      <tr key={r.id} className="hover:bg-slate-50/70">
+                        <td className="py-3.5 px-4 font-semibold text-slate-900">{r.name}</td>
+                        <td className="py-3.5 px-4 font-mono text-slate-500" dir="ltr">{r.email}</td>
+                        <td className="py-3.5 px-4">{getRoleLabel(r.requestedRole)}</td>
+                        <td className="py-3.5 px-4 text-slate-500">{r.createdAt ? new Date(r.createdAt).toLocaleDateString('ar-EG') : '-'}</td>
+                        <td className="py-3.5 px-4 text-center">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleApproveRequest(r.id)}
+                              className="text-emerald-600 hover:bg-emerald-50 p-1 rounded cursor-pointer"
+                              title="الموافقة وإنشاء الحساب"
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleRejectRequest(r.id)}
+                              className="text-red-500 hover:bg-red-50 p-1 rounded cursor-pointer"
+                              title="رفض الطلب"
+                            >
+                              <XCircle className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -329,7 +457,6 @@ export const UserManagement: React.FC = () => {
                   <option value="COLLEGE_MONITOR">مسؤول كلية (College Monitor)</option>
                   <option value="DEPARTMENT_MONITOR">مسؤول قسم (Department Monitor)</option>
                   <option value="FACULTY">عضو هيئة تدريس (Faculty Member)</option>
-                  <option value="OWNER">مالك الجامعة (System Owner)</option>
                 </select>
               </div>
 

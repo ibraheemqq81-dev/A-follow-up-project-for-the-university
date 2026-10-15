@@ -30,7 +30,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const res = await api.getMe();
       if (res && res.user) {
-        setUser(res.user);
+        const u = res.user;
+        if (u.status === 'inactive' || (u.accountStatus && u.accountStatus !== 'active')) {
+          removeStoredToken();
+          setTokenState(null);
+          setUser(null);
+          return;
+        }
+        setUser(u);
       } else {
         removeStoredToken();
         setTokenState(null);
@@ -55,14 +62,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     };
 
-    const handleAuthRefreshed = (e: any) => {
-      if (e?.detail?.token && e?.detail?.user) {
-        setTokenState(e.detail.token);
-        setUser(e.detail.user);
-        setIsLoading(false);
-      }
-    };
-
     const handleStorageChange = (e: StorageEvent) => {
       if (e.key === 'uomus_auth_token') {
         if (!e.newValue) {
@@ -75,12 +74,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     window.addEventListener('auth:unauthorized', handleUnauthorized);
-    window.addEventListener('auth:refreshed', handleAuthRefreshed);
     window.addEventListener('storage', handleStorageChange);
 
     return () => {
       window.removeEventListener('auth:unauthorized', handleUnauthorized);
-      window.removeEventListener('auth:refreshed', handleAuthRefreshed);
       window.removeEventListener('storage', handleStorageChange);
     };
   }, []);
@@ -101,7 +98,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try { await api.logout(); } catch { /* best effort */ }
     removeStoredToken();
     setTokenState(null);
     setUser(null);

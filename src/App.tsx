@@ -4,6 +4,7 @@ import { NotificationProvider } from './context/NotificationContext.tsx';
 import { Navbar } from './components/layout/Navbar.tsx';
 import { Sidebar, ActiveTab } from './components/layout/Sidebar.tsx';
 import { LoginModal } from './components/auth/LoginModal.tsx';
+import { ChangePasswordScreen } from './components/auth/ChangePasswordScreen.tsx';
 import { Dashboard } from './components/dashboard/Dashboard.tsx';
 import { AttendanceRecording } from './components/attendance/AttendanceRecording.tsx';
 import { LiveMonitoring } from './components/attendance/LiveMonitoring.tsx';
@@ -16,16 +17,24 @@ import { FacultyManagement } from './components/faculty/FacultyManagement.tsx';
 import { UserManagement } from './components/users/UserManagement.tsx';
 import { OfficialReports } from './components/reports/OfficialReports.tsx';
 import { SystemSettings } from './components/settings/SystemSettings.tsx';
+import { DeviceManagement } from './components/settings/DeviceManagement.tsx';
 import { ImportCenter } from './components/import/ImportCenter.tsx';
 import { LectureReminderToast } from './components/notifications/LectureReminderToast.tsx';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>(
     user?.role === 'FACULTY' ? 'attendance' : 'dashboard'
   );
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [targetAttendanceScheduleId, setTargetAttendanceScheduleId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    const handler = () => setMustChangePassword(true);
+    window.addEventListener('auth:must-change-password', handler);
+    return () => window.removeEventListener('auth:must-change-password', handler);
+  }, []);
 
   // Auto-switch to attendance portal if role is FACULTY
   useEffect(() => {
@@ -53,6 +62,10 @@ const MainLayout: React.FC = () => {
 
   if (!user) {
     return <LoginModal />;
+  }
+
+  if (mustChangePassword || user.mustChangePassword) {
+    return <ChangePasswordScreen />;
   }
 
   const renderContent = () => {
@@ -88,6 +101,8 @@ const MainLayout: React.FC = () => {
         return <OfficialReports />;
       case 'settings':
         return <SystemSettings />;
+      case 'devices':
+        return <DeviceManagement currentUser={user} />;
       default:
         return <Dashboard onNavigate={setActiveTab} />;
     }

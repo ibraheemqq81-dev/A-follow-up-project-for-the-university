@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
-import { Building2, Lock, Mail, CircleAlert as AlertCircle, ArrowLeft } from 'lucide-react';
+import { Building2, Lock, Mail, CircleAlert as AlertCircle, ArrowLeft, UserPlus } from 'lucide-react';
+import { RegistrationRequestModal } from './RegistrationRequestModal.tsx';
 
 export const LoginModal: React.FC = () => {
   const { login } = useAuth();
@@ -8,6 +9,7 @@ export const LoginModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showRegistration, setShowRegistration] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,6 +23,10 @@ export const LoginModal: React.FC = () => {
       setIsLoading(false);
     }
   };
+
+  if (showRegistration) {
+    return <RegistrationRequestModal onClose={() => setShowRegistration(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
@@ -94,6 +100,16 @@ export const LoginModal: React.FC = () => {
             )}
           </button>
         </form>
+
+        <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+          <button
+            onClick={() => setShowRegistration(true)}
+            className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center justify-center gap-1.5 mx-auto"
+          >
+            <UserPlus className="w-4 h-4" />
+            طلب إنشاء حساب جديد
+          </button>
+        </div>
       </div>
     </div>
   );

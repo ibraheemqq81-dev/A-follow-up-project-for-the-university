@@ -1,5 +1,7 @@
 export type UserRole = 'OWNER' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY';
 
+export type AccountStatus = 'active' | 'pending_email' | 'pending_approval' | 'rejected' | 'suspended';
+
 export interface User {
   id: string;
   uid?: string;
@@ -12,8 +14,42 @@ export interface User {
   assignedFacultyId?: string | null;
   avatar?: string | null;
   status?: string;
+  accountStatus?: AccountStatus;
+  maxDevices?: number;
   mustChangePassword?: boolean;
+  tokenVersion?: number;
   createdAt?: string;
+}
+
+export interface RegistrationRequest {
+  id: string;
+  name: string;
+  email: string;
+  requestedRole: UserRole;
+  collegeId?: string | null;
+  departmentId?: string | null;
+  facultyId?: string | null;
+  status: 'pending_email' | 'pending_approval' | 'approved' | 'rejected';
+  emailVerifiedAt?: string | null;
+  rejectionReason?: string | null;
+  reviewedBy?: string | null;
+  reviewedByName?: string | null;
+  reviewedAt?: string | null;
+  createdAt?: string;
+}
+
+export interface UserDevice {
+  id: string;
+  userId: string;
+  deviceFingerprint: string;
+  deviceName?: string;
+  userAgent?: string;
+  status: 'pending' | 'approved' | 'revoked';
+  approvedBy?: string | null;
+  approvedByName?: string | null;
+  approvedAt?: string | null;
+  createdAt?: string;
+  lastSeenAt?: string;
 }
 
 export interface College {

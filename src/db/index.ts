@@ -676,7 +676,7 @@ function initDatabase() {
         id, uid, name, email, role, role_title_ar,
         assigned_college_id, assigned_department_id, assigned_faculty_id,
         must_change_password, status, token_version, password_hash, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 1, 'active', 0, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, 'active', 0, ?, ?, ?)
     `).run(
       'user-owner-default',
       'uid-owner-default',

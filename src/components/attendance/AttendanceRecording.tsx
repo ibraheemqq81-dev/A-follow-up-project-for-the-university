@@ -289,9 +289,8 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
         const found = fac.find((f: any) => f?.email?.toLowerCase() === user.email?.toLowerCase());
         if (found) matchedId = found.id;
       }
-      if (!matchedId && fac.length > 0) {
-        const ibraheem = fac.find((f: any) => f?.id === 'fac-ibraheem' || f?.nameAr?.includes('إبراهيم'));
-        matchedId = ibraheem ? ibraheem.id : fac[0]?.id || '';
+      if (!matchedId && user?.role !== 'FACULTY' && fac.length > 0) {
+        matchedId = fac[0]?.id || '';
       }
 
       setSelectedFacultyId((prev) => prev || matchedId);
@@ -534,7 +533,7 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
       lectureDate: todayDateStr,
       status: 'PRESENT',
       presentCount: countNum,
-      totalCount: 45,
+      totalCount: countNum, // Use actual present count as total (will be updated when enrollment data is available)
       topicsCovered: `محاضرة ${sub?.nameAr || 'المادة'} — الفصل الدراسي الحالي`,
       verificationMethod: photoEvidence ? 'CAMERA_EVIDENCE' : 'DIRECT_VERIFICATION',
       photoEvidence: photoEvidence || undefined,

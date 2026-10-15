@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
 import {
   Calendar,
   Plus,
@@ -18,6 +19,7 @@ import {
 } from 'lucide-react';
 
 export const ScheduleManagement: React.FC = () => {
+  const { user } = useAuth();
   const [schedules, setSchedules] = useState<any[]>([]);
   const [colleges, setColleges] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -80,13 +82,17 @@ export const ScheduleManagement: React.FC = () => {
   const loadAll = async () => {
     setIsLoading(true);
     try {
+      const scheduleParams: Record<string, string> = {};
+      if (user?.role === 'DEPARTMENT_MONITOR' && user.assignedDepartmentId) {
+        scheduleParams.departmentId = user.assignedDepartmentId;
+      }
       const [schRes, colRes, depRes, rmRes, facRes, subRes, stgRes, secRes, semRes, yrRes] = await Promise.allSettled([
-        api.getSchedules(),
+        api.getSchedules(scheduleParams),
         api.getColleges(),
-        api.getDepartments(),
+        api.getDepartments(user?.role === 'DEPARTMENT_MONITOR' ? user.assignedDepartmentId : undefined),
         api.getRooms(),
-        api.getFaculties(),
-        api.getSubjects(),
+        api.getFaculties(user?.role === 'DEPARTMENT_MONITOR' ? user.assignedDepartmentId : undefined),
+        api.getSubjects(user?.role === 'DEPARTMENT_MONITOR' ? user.assignedDepartmentId : undefined),
         api.getStages(),
         api.getSections(),
         api.getSemesters(),

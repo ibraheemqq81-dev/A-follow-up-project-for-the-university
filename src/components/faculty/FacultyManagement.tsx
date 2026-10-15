@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
 import { Users, Plus, Trash2, Mail, Phone, Award, CheckCircle2, AlertCircle, Search } from 'lucide-react';
 
 export const FacultyManagement: React.FC = () => {
+  const { user } = useAuth();
   const [faculty, setFaculty] = useState<any[]>([]);
   const [colleges, setColleges] = useState<any[]>([]);
   const [departments, setDepartments] = useState<any[]>([]);
@@ -32,9 +34,9 @@ export const FacultyManagement: React.FC = () => {
     setIsLoading(true);
     try {
       const [facRes, colRes, depRes] = await Promise.allSettled([
-        api.getFaculties(),
+        api.getFaculties(user?.role === 'DEPARTMENT_MONITOR' ? user.assignedDepartmentId : undefined),
         api.getColleges(),
-        api.getDepartments(),
+        api.getDepartments(user?.role === 'DEPARTMENT_MONITOR' ? user.assignedDepartmentId : undefined),
       ]);
       const fac = facRes.status === 'fulfilled' && Array.isArray(facRes.value) ? facRes.value : [];
       const col = colRes.status === 'fulfilled' && Array.isArray(colRes.value) ? colRes.value : [];

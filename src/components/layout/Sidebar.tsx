@@ -14,6 +14,7 @@ import {
   FileText,
   Settings,
   FileSpreadsheet,
+  Smartphone,
 } from 'lucide-react';
 
 export type ActiveTab =
@@ -29,7 +30,8 @@ export type ActiveTab =
   | 'faculty'
   | 'users'
   | 'reports'
-  | 'settings';
+  | 'settings'
+  | 'devices';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -67,6 +69,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'users', label: 'إدارة الحسابات والصلاحيات', icon: UserCheck, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'النظام والإدارة' },
     { id: 'reports', label: 'التقارير والموقف اليومي', icon: FileText, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'النظام والإدارة' },
     { id: 'settings', label: 'إعدادات النظام والتقويم الأكاديمي', icon: Settings, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'النظام والإدارة' },
+    { id: 'devices', label: 'إدارة الأجهزة', icon: Smartphone, roles: ['OWNER'], category: 'النظام والإدارة' },
   ];
 
   const allowedItems = navItems.filter((item) => item.roles.includes(role));
