@@ -39,6 +39,17 @@ import {
   systemSettings,
   importJobs,
   importErrors,
+  equipment,
+  maintenanceTickets,
+  changeRequests,
+  userDevices,
+  registrationRequests,
+  emailVerificationCodes,
+  academicCalendarEvents,
+  deanUpdates,
+  roles,
+  permissions,
+  rolePermissions,
 } from './src/db/schema.ts';
 import { eq, and, sql, desc, or, not, ne, inArray } from 'drizzle-orm';
 import { registerDepartmentPackageRoutes } from './departmentPackage.routes.ts';
@@ -145,7 +156,7 @@ export interface AuthUser {
   uid: string;
   name: string;
   email: string;
-  role: 'OWNER' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY';
+  role: 'OWNER' | 'COLLEGE_DEAN' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY';
   roleTitleAr?: string;
   assignedCollegeId?: string | null;
   assignedDepartmentId?: string | null;
@@ -252,7 +263,7 @@ export function authenticateToken(req: Request, res: Response, next: NextFunctio
 }
 
 // Role-Based Access Control Middleware (Requirement 4)
-export function requireRole(...allowedRoles: Array<'OWNER' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY'>) {
+export function requireRole(...allowedRoles: Array<AuthUser['role']>) {
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
@@ -457,11 +468,48 @@ export function areIntervalsOverlapping(startA: string, endA: string, startB: st
 // ==========================================
 // 4. User Validation Zod Schema
 // ==========================================
+export function getMinPasswordLength(): number {
+  try {
+    const row = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'minPasswordLength'").get() as any;
+    if (row && row.value) {
+      const val = parseInt(row.value, 10);
+      if (!isNaN(val) && val >= 6 && val <= 32) return val;
+    }
+  } catch {}
+  return 8; // Standard university baseline
+}
+
+export function getMaxPasswordLength(): number {
+  try {
+    const row = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'maxPasswordLength'").get() as any;
+    if (row && row.value) {
+      const val = parseInt(row.value, 10);
+      if (!isNaN(val) && val >= 8 && val <= 128) return val;
+    }
+  } catch {}
+  return 64; // Default max password length
+}
+
+export function validatePassword(value: unknown, customMin?: number): string | null {
+  const minLen = customMin ?? getMinPasswordLength();
+  const maxLen = getMaxPasswordLength();
+  if (typeof value !== 'string' || value.length < minLen) {
+    return `كلمة المرور يجب أن لا تقل عن ${minLen} خانات`;
+  }
+  if (value.length > maxLen) {
+    return `كلمة المرور يجب أن لا تزيد عن ${maxLen} خانة`;
+  }
+  if (/^(password|12345678|123456789012|qwertyuiop)$/i.test(value)) {
+    return 'اختر كلمة مرور قوية وغير شائعة';
+  }
+  return null;
+}
+
 const createUserSchema = z.object({
   name: z.string().min(3, 'الاسم يجب أن لا يقل عن 3 أحرف'),
   email: z.string().email('صيغة البريد الإلكتروني غير صحيحة'),
-  password: z.string().min(12, 'كلمة المرور يجب أن لا تقل عن 12 خانة'),
-  role: z.enum(['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR', 'FACULTY']),
+  password: z.string(),
+  role: z.enum(['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR', 'FACULTY']),
   roleTitleAr: z.string().optional(),
   assignedCollegeId: z.string().nullable().optional(),
   assignedDepartmentId: z.string().nullable().optional(),
@@ -469,11 +517,20 @@ const createUserSchema = z.object({
   employeeId: z.string().optional(),
   avatar: z.string().optional(),
 }).superRefine((data, ctx) => {
-  if (data.role === 'COLLEGE_MONITOR') {
+  const passErr = validatePassword(data.password);
+  if (passErr) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: passErr,
+      path: ['password'],
+    });
+  }
+
+  if (data.role === 'COLLEGE_MONITOR' || data.role === 'COLLEGE_DEAN') {
     if (!data.assignedCollegeId || data.assignedCollegeId.trim() === '') {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        message: 'يجب ربط مسؤول الكلية بكلية محددة (assignedCollegeId مطلوب)',
+        message: 'يجب ربط المستخدم بكلية محددة (assignedCollegeId مطلوب)',
         path: ['assignedCollegeId'],
       });
     }
@@ -506,12 +563,6 @@ const createUserSchema = z.object({
     }
   }
 });
-
-function validatePassword(value: unknown): string | null {
-  if (typeof value !== 'string' || value.length < 12) return 'كلمة المرور يجب أن لا تقل عن 12 خانة';
-  if (/^(password|123456789012|qwertyuiop12)$/i.test(value)) return 'اختر كلمة مرور أقوى';
-  return null;
-}
 
 // ==========================================
 // 5. AUTHENTICATION & USERS APIS
@@ -6072,6 +6123,1196 @@ app.get('/api/system/metrics', authenticateToken, requireRole('OWNER'), (req: Re
       collectedAt: new Date().toISOString(),
     },
   });
+});
+
+// ==========================================
+// 12.7 PASSWORD POLICY APIS (OWNER)
+// ==========================================
+app.get('/api/settings/password-policy', authenticateToken, (req: Request, res: Response) => {
+  const minLength = getMinPasswordLength();
+  res.json({
+    success: true,
+    data: {
+      minLength,
+      requireNumbers: true,
+      requireSymbols: false,
+    },
+  });
+});
+
+app.put('/api/settings/password-policy', authenticateToken, requireRole('OWNER'), async (req: Request, res: Response) => {
+  try {
+    const { minLength } = req.body;
+    const num = parseInt(String(minLength), 10);
+    if (isNaN(num) || num < 6 || num > 32) {
+      return res.status(400).json({ success: false, message: 'الحد الأدنى يجب أن يكون بين 6 و 32 خانة' });
+    }
+
+    const now = new Date().toISOString();
+    const existing = sqlite.prepare("SELECT id FROM system_settings WHERE key = 'minPasswordLength'").get() as any;
+    if (existing) {
+      sqlite.prepare("UPDATE system_settings SET value = ?, updated_at = ? WHERE key = 'minPasswordLength'").run(String(num), now);
+    } else {
+      sqlite.prepare("INSERT INTO system_settings (id, key, value, description, updated_at) VALUES (?, 'minPasswordLength', ?, 'الحد الأدنى لطول كلمة المرور', ?)").run(generateId('setting-pwd'), String(num), now);
+    }
+
+    await db.insert(auditLogs).values({
+      id: generateId('audit-pwd-policy'),
+      userId: req.user!.id,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'UPDATE_PASSWORD_POLICY',
+      entity: 'system_settings',
+      entityId: 'minPasswordLength',
+      details: `تم تحديث الحد الأدنى لكلمة المرور إلى ${num} خانات`,
+      newValue: String(num),
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
+
+    res.json({ success: true, message: `تم تحديث سياسة كلمة المرور بنجاح (${num} خانات كحد أدنى)`, minLength: num });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// Account Settings API
+app.get('/api/settings/account', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const row = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'accountSettings'").get() as any;
+    let data = { selfRegistration: false, emailVerification: true, requireApproval: true, defaultMaxDevices: 3, passwordMinLength: getMinPasswordLength(), passwordMaxLength: getMaxPasswordLength() };
+    if (row && row.value) {
+      try { data = { ...data, ...JSON.parse(row.value) }; } catch {}
+    }
+    data.passwordMinLength = getMinPasswordLength();
+    data.passwordMaxLength = getMaxPasswordLength();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/settings/account', authenticateToken, requireRole('OWNER'), async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    const now = new Date().toISOString();
+
+    if (body.passwordMinLength !== undefined) {
+      const minNum = parseInt(String(body.passwordMinLength), 10);
+      if (!isNaN(minNum) && minNum >= 6 && minNum <= 32) {
+        const existingMin = sqlite.prepare("SELECT id FROM system_settings WHERE key = 'minPasswordLength'").get() as any;
+        if (existingMin) {
+          sqlite.prepare("UPDATE system_settings SET value = ?, updated_at = ? WHERE key = 'minPasswordLength'").run(String(minNum), now);
+        } else {
+          sqlite.prepare("INSERT INTO system_settings (id, key, value, description, updated_at) VALUES (?, 'minPasswordLength', ?, 'الحد الأدنى لطول كلمة المرور', ?)").run(generateId('setting-pwd-min'), String(minNum), now);
+        }
+      }
+    }
+
+    if (body.passwordMaxLength !== undefined) {
+      const maxNum = parseInt(String(body.passwordMaxLength), 10);
+      if (!isNaN(maxNum) && maxNum >= 8 && maxNum <= 128) {
+        const existingMax = sqlite.prepare("SELECT id FROM system_settings WHERE key = 'maxPasswordLength'").get() as any;
+        if (existingMax) {
+          sqlite.prepare("UPDATE system_settings SET value = ?, updated_at = ? WHERE key = 'maxPasswordLength'").run(String(maxNum), now);
+        } else {
+          sqlite.prepare("INSERT INTO system_settings (id, key, value, description, updated_at) VALUES (?, 'maxPasswordLength', ?, 'الحد الأقصى لطول كلمة المرور', ?)").run(generateId('setting-pwd-max'), String(maxNum), now);
+        }
+      }
+    }
+
+    const existing = sqlite.prepare("SELECT id FROM system_settings WHERE key = 'accountSettings'").get() as any;
+    const jsonStr = JSON.stringify(body);
+    if (existing) {
+      sqlite.prepare("UPDATE system_settings SET value = ?, updated_at = ? WHERE key = 'accountSettings'").run(jsonStr, now);
+    } else {
+      sqlite.prepare("INSERT INTO system_settings (id, key, value, description, updated_at) VALUES (?, 'accountSettings', ?, 'إعدادات الحسابات والأمان', ?)").run(generateId('setting-acc'), jsonStr, now);
+    }
+
+    await db.insert(auditLogs).values({
+      id: generateId('audit-acc-settings'),
+      userId: req.user!.id,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'UPDATE_ACCOUNT_SETTINGS',
+      entity: 'system_settings',
+      entityId: 'accountSettings',
+      details: 'تم تحديث إعدادات الحسابات والأمان',
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
+
+    res.json({ success: true, message: 'تم حفظ إعدادات الحسابات بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Email Config API
+app.get('/api/settings/email-config', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const row = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'emailConfig'").get() as any;
+    let data = { configured: false, enabled: false, fromName: 'جامعة المستقبل', fromEmail: 'noreply@uomus.edu.iq', codeExpiryMinutes: 10, resendCooldownSeconds: 120 };
+    if (row && row.value) {
+      try { data = { ...data, ...JSON.parse(row.value) }; } catch {}
+    }
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/settings/email-config', authenticateToken, requireRole('OWNER'), async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    const now = new Date().toISOString();
+    const existing = sqlite.prepare("SELECT id FROM system_settings WHERE key = 'emailConfig'").get() as any;
+    const jsonStr = JSON.stringify(body);
+    if (existing) {
+      sqlite.prepare("UPDATE system_settings SET value = ?, updated_at = ? WHERE key = 'emailConfig'").run(jsonStr, now);
+    } else {
+      sqlite.prepare("INSERT INTO system_settings (id, key, value, description, updated_at) VALUES (?, 'emailConfig', ?, 'إعدادات البريد الإلكتروني', ?)").run(generateId('setting-email'), jsonStr, now);
+    }
+    res.json({ success: true, message: 'تم حفظ إعدادات البريد بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// University Info API
+app.get('/api/settings/university', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const row = sqlite.prepare("SELECT value FROM system_settings WHERE key = 'universityInfo'").get() as any;
+    let data = { name: 'جامعة المستقبل', chancellor: 'أ.د. حسن شاكر مجدي', address: 'بابل - الحلة، العراق', phone: '+964 30 000 0000', email: 'info@uomus.edu.iq', website: 'https://uomus.edu.iq' };
+    if (row && row.value) {
+      try { data = { ...data, ...JSON.parse(row.value) }; } catch {}
+    }
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/settings/university', authenticateToken, requireRole('OWNER'), async (req: Request, res: Response) => {
+  try {
+    const body = req.body || {};
+    const now = new Date().toISOString();
+    const existing = sqlite.prepare("SELECT id FROM system_settings WHERE key = 'universityInfo'").get() as any;
+    const jsonStr = JSON.stringify(body);
+    if (existing) {
+      sqlite.prepare("UPDATE system_settings SET value = ?, updated_at = ? WHERE key = 'universityInfo'").run(jsonStr, now);
+    } else {
+      sqlite.prepare("INSERT INTO system_settings (id, key, value, description, updated_at) VALUES (?, 'universityInfo', ?, 'معلومات الجامعة', ?)").run(generateId('setting-univ'), jsonStr, now);
+    }
+    res.json({ success: true, message: 'تم حفظ معلومات الجامعة بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 12.8 EQUIPMENT & MAINTENANCE APIS
+// ==========================================
+
+// GET /api/equipment
+app.get('/api/equipment', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { collegeId, departmentId, roomId, type, status, search } = req.query;
+    let query = 'SELECT * FROM equipment WHERE is_deleted = 0';
+    const params: any[] = [];
+
+    // Role-based scope enforcement
+    if (req.user!.role === 'COLLEGE_MONITOR' || req.user!.role === 'COLLEGE_DEAN') {
+      if (req.user!.assignedCollegeId) {
+        query += ' AND college_id = ?';
+        params.push(req.user!.assignedCollegeId);
+      }
+    } else if (req.user!.role === 'DEPARTMENT_MONITOR') {
+      if (req.user!.assignedDepartmentId) {
+        query += ' AND department_id = ?';
+        params.push(req.user!.assignedDepartmentId);
+      }
+    } else if (collegeId) {
+      query += ' AND college_id = ?';
+      params.push(collegeId);
+    }
+
+    if (departmentId) {
+      query += ' AND department_id = ?';
+      params.push(departmentId);
+    }
+    if (roomId) {
+      query += ' AND room_id = ?';
+      params.push(roomId);
+    }
+    if (type) {
+      query += ' AND type = ?';
+      params.push(type);
+    }
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+    if (search) {
+      query += ' AND (name_ar LIKE ? OR code LIKE ? OR serial_number LIKE ?)';
+      params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+    }
+
+    query += ' ORDER BY created_at DESC';
+    const list = sqlite.prepare(query).all(...params);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/equipment
+app.post('/api/equipment', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { collegeId, departmentId, roomId, buildingId, code, nameAr, nameEn, type, status, serialNumber, specifications, purchaseDate, notes } = req.body;
+    if (!nameAr || !type) {
+      return res.status(400).json({ message: 'اسم الجهاز ونوعه حقول مطلوبة' });
+    }
+
+    let resolvedCollegeId = collegeId;
+    let resolvedDeptId = departmentId;
+    if (req.user!.role === 'COLLEGE_MONITOR') {
+      resolvedCollegeId = req.user!.assignedCollegeId;
+    } else if (req.user!.role === 'DEPARTMENT_MONITOR') {
+      resolvedCollegeId = req.user!.assignedCollegeId;
+      resolvedDeptId = req.user!.assignedDepartmentId;
+    }
+
+    if (!resolvedCollegeId) {
+      return res.status(400).json({ message: 'يجب تحديد الكلية التابع لها الجهاز' });
+    }
+
+    const id = generateId('eq');
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO equipment (
+        id, college_id, department_id, room_id, building_id, code, name_ar, name_en,
+        type, status, serial_number, specifications, purchase_date, notes, is_deleted, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(
+      id, resolvedCollegeId, resolvedDeptId || null, roomId || null, buildingId || null,
+      code || null, nameAr, nameEn || null, type, status || 'OPERATIONAL',
+      serialNumber || null, specifications || null, purchaseDate || null, notes || null,
+      now, now
+    );
+
+    await db.insert(auditLogs).values({
+      id: generateId('audit-eq'),
+      userId: req.user!.id,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'CREATE_EQUIPMENT',
+      entity: 'equipment',
+      entityId: id,
+      details: `إضافة معدة/جهاز جديد: ${nameAr} (${code || ''})`,
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
+
+    res.status(201).json({ success: true, message: 'تم تسجيل الجهاز بنجاح', id });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/equipment/:id
+app.put('/api/equipment/:id', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const existing = sqlite.prepare('SELECT * FROM equipment WHERE id = ? AND is_deleted = 0').get(id) as any;
+    if (!existing) {
+      return res.status(404).json({ message: 'الجهاز غير موجود' });
+    }
+
+    // Scope check
+    if (req.user!.role === 'COLLEGE_MONITOR' && existing.college_id !== req.user!.assignedCollegeId) {
+      return res.status(403).json({ message: 'غير مصرح بتعديل أجهزة خارج كليتك' });
+    }
+    if (req.user!.role === 'DEPARTMENT_MONITOR' && existing.department_id !== req.user!.assignedDepartmentId) {
+      return res.status(403).json({ message: 'غير مصرح بتعديل أجهزة خارج قسمك' });
+    }
+
+    const { nameAr, nameEn, code, type, status, roomId, buildingId, serialNumber, specifications, purchaseDate, notes } = req.body;
+    const now = new Date().toISOString();
+
+    sqlite.prepare(`
+      UPDATE equipment SET
+        name_ar = COALESCE(?, name_ar),
+        name_en = COALESCE(?, name_en),
+        code = COALESCE(?, code),
+        type = COALESCE(?, type),
+        status = COALESCE(?, status),
+        room_id = COALESCE(?, room_id),
+        building_id = COALESCE(?, building_id),
+        serial_number = COALESCE(?, serial_number),
+        specifications = COALESCE(?, specifications),
+        purchase_date = COALESCE(?, purchase_date),
+        notes = COALESCE(?, notes),
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      nameAr, nameEn, code, type, status, roomId, buildingId, serialNumber, specifications, purchaseDate, notes, now, id
+    );
+
+    res.json({ success: true, message: 'تم تحديث بيانات الجهاز بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// DELETE /api/equipment/:id
+app.delete('/api/equipment/:id', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const now = new Date().toISOString();
+    sqlite.prepare('UPDATE equipment SET is_deleted = 1, updated_at = ? WHERE id = ?').run(now, id);
+    res.json({ success: true, message: 'تم حذف الجهاز بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/maintenance-tickets
+app.get('/api/maintenance-tickets', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { status, priority, collegeId, departmentId, equipmentId } = req.query;
+    let query = 'SELECT * FROM maintenance_tickets WHERE is_deleted = 0';
+    const params: any[] = [];
+
+    if (req.user!.role === 'COLLEGE_MONITOR' || req.user!.role === 'COLLEGE_DEAN') {
+      if (req.user!.assignedCollegeId) {
+        query += ' AND college_id = ?';
+        params.push(req.user!.assignedCollegeId);
+      }
+    } else if (req.user!.role === 'DEPARTMENT_MONITOR') {
+      if (req.user!.assignedDepartmentId) {
+        query += ' AND department_id = ?';
+        params.push(req.user!.assignedDepartmentId);
+      }
+    } else if (req.user!.role === 'FACULTY') {
+      query += ' AND (reported_by_user_id = ? OR department_id = ?)';
+      params.push(req.user!.id, req.user!.assignedDepartmentId || '');
+    } else if (collegeId) {
+      query += ' AND college_id = ?';
+      params.push(collegeId);
+    }
+
+    if (departmentId) {
+      query += ' AND department_id = ?';
+      params.push(departmentId);
+    }
+    if (equipmentId) {
+      query += ' AND equipment_id = ?';
+      params.push(equipmentId);
+    }
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+    if (priority) {
+      query += ' AND priority = ?';
+      params.push(priority);
+    }
+
+    query += ' ORDER BY created_at DESC';
+    const list = sqlite.prepare(query).all(...params);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/maintenance-tickets
+app.post('/api/maintenance-tickets', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { equipmentId, collegeId, departmentId, roomId, buildingId, title, description, priority, impactOnLectures, photoUrl } = req.body;
+    if (!title || !description) {
+      return res.status(400).json({ message: 'عنوان البلاغ والوصف حقول مطلوبة' });
+    }
+
+    let resolvedCollegeId = collegeId || req.user!.assignedCollegeId;
+    let resolvedDeptId = departmentId || req.user!.assignedDepartmentId;
+
+    if (!resolvedCollegeId && equipmentId) {
+      const eqRow = sqlite.prepare('SELECT college_id, department_id, room_id, building_id FROM equipment WHERE id = ?').get(equipmentId) as any;
+      if (eqRow) {
+        resolvedCollegeId = eqRow.college_id;
+        resolvedDeptId = resolvedDeptId || eqRow.department_id;
+      }
+    }
+
+    if (!resolvedCollegeId) {
+      const firstCol = sqlite.prepare('SELECT id FROM colleges WHERE is_deleted = 0 LIMIT 1').get() as any;
+      resolvedCollegeId = firstCol?.id || 'col-default';
+    }
+
+    const id = generateId('tkt');
+    const ticketNumber = `TKT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const now = new Date().toISOString();
+
+    sqlite.prepare(`
+      INSERT INTO maintenance_tickets (
+        id, ticket_number, equipment_id, college_id, department_id, room_id, building_id,
+        reported_by_user_id, reported_by_name, title, description, priority, impact_on_lectures,
+        status, photo_url, is_deleted, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'NEW', ?, 0, ?, ?)
+    `).run(
+      id, ticketNumber, equipmentId || null, resolvedCollegeId, resolvedDeptId || null,
+      roomId || null, buildingId || null, req.user!.id, req.user!.name,
+      title, description, priority || 'MEDIUM', impactOnLectures || 'NONE',
+      photoUrl || null, now, now
+    );
+
+    // If equipment is linked, update its status
+    if (equipmentId) {
+      sqlite.prepare("UPDATE equipment SET status = 'NEEDS_MAINTENANCE', updated_at = ? WHERE id = ?").run(now, equipmentId);
+    }
+
+    // Notify college monitor
+    const colMonitor = sqlite.prepare("SELECT id FROM users WHERE role = 'COLLEGE_MONITOR' AND assigned_college_id = ?").get(resolvedCollegeId) as any;
+    if (colMonitor) {
+      sqlite.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
+        VALUES (?, ?, ?, ?, 'MAINTENANCE_ALERT', 0, ?)
+      `).run(generateId('notif'), colMonitor.id, `بلاغ صيانة جديد: ${title}`, `تم تسجيل بلاغ بأولوية (${priority || 'متوسطة'}) برقم ${ticketNumber}`, now);
+    }
+
+    await db.insert(auditLogs).values({
+      id: generateId('audit-maint'),
+      userId: req.user!.id,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'CREATE_MAINTENANCE_TICKET',
+      entity: 'maintenance_tickets',
+      entityId: id,
+      details: `تسجيل بلاغ صيانة ${ticketNumber}: ${title} (${priority || 'متوسطة'})`,
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
+
+    res.status(201).json({ success: true, message: `تم تسجيل البلاغ بنجاح برقم ${ticketNumber}`, id, ticketNumber });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// PUT /api/maintenance-tickets/:id
+app.put('/api/maintenance-tickets/:id', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const ticket = sqlite.prepare('SELECT * FROM maintenance_tickets WHERE id = ? AND is_deleted = 0').get(id) as any;
+    if (!ticket) {
+      return res.status(404).json({ message: 'البلاغ غير موجود' });
+    }
+
+    const { status, priority, assignedTeam, actionTaken, resolutionNotes } = req.body;
+
+    // Strict validation: cannot close ticket without documented resolution notes!
+    if (status === 'CLOSED' && (!resolutionNotes || resolutionNotes.trim() === '')) {
+      return res.status(400).json({ message: 'لا يمكن إغلاق البلاغ نهائياً دون توثيق نتيجة الصيانة في خانة الملاحظات' });
+    }
+
+    const now = new Date().toISOString();
+    const resolutionDate = (status === 'CLOSED' || status === 'REPAIRED') ? now : ticket.resolution_date;
+
+    sqlite.prepare(`
+      UPDATE maintenance_tickets SET
+        status = COALESCE(?, status),
+        priority = COALESCE(?, priority),
+        assigned_team = COALESCE(?, assigned_team),
+        action_taken = COALESCE(?, action_taken),
+        resolution_notes = COALESCE(?, resolution_notes),
+        resolution_date = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(
+      status, priority, assignedTeam, actionTaken, resolutionNotes, resolutionDate, now, id
+    );
+
+    // If repaired or closed, restore equipment status to OPERATIONAL
+    if ((status === 'CLOSED' || status === 'REPAIRED') && ticket.equipment_id) {
+      sqlite.prepare("UPDATE equipment SET status = 'OPERATIONAL', updated_at = ? WHERE id = ?").run(now, ticket.equipment_id);
+    }
+
+    // Notify original reporter if status changed
+    if (status && status !== ticket.status) {
+      sqlite.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
+        VALUES (?, ?, ?, ?, 'MAINTENANCE_UPDATE', 0, ?)
+      `).run(generateId('notif'), ticket.reported_by_user_id, `تحديث حالة البلاغ ${ticket.ticket_number}`, `تم تغيير حالة البلاغ إلى: ${status}`, now);
+    }
+
+    await db.insert(auditLogs).values({
+      id: generateId('audit-maint-upd'),
+      userId: req.user!.id,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'UPDATE_MAINTENANCE_TICKET',
+      entity: 'maintenance_tickets',
+      entityId: id,
+      details: `تحديث البلاغ ${ticket.ticket_number}: الحالة (${status || ticket.status})`,
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
+
+    res.json({ success: true, message: 'تم تحديث حالة البلاغ بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// GET /api/maintenance-tickets/stats
+app.get('/api/maintenance-tickets/stats', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    let colFilter = '';
+    const params: any[] = [];
+    if (req.user!.role === 'COLLEGE_MONITOR' || req.user!.role === 'COLLEGE_DEAN') {
+      if (req.user!.assignedCollegeId) {
+        colFilter = ' AND college_id = ?';
+        params.push(req.user!.assignedCollegeId);
+      }
+    }
+
+    const total = (sqlite.prepare(`SELECT COUNT(*) as count FROM maintenance_tickets WHERE is_deleted = 0${colFilter}`).get(...params) as any)?.count || 0;
+    const openTickets = (sqlite.prepare(`SELECT COUNT(*) as count FROM maintenance_tickets WHERE is_deleted = 0 AND status IN ('NEW', 'UNDER_REVIEW')${colFilter}`).get(...params) as any)?.count || 0;
+    const inProgress = (sqlite.prepare(`SELECT COUNT(*) as count FROM maintenance_tickets WHERE is_deleted = 0 AND status IN ('ASSIGNED_MAINTENANCE', 'IN_PROGRESS', 'WAITING_PARTS')${colFilter}`).get(...params) as any)?.count || 0;
+    const highPriority = (sqlite.prepare(`SELECT COUNT(*) as count FROM maintenance_tickets WHERE is_deleted = 0 AND priority IN ('HIGH', 'EMERGENCY') AND status != 'CLOSED'${colFilter}`).get(...params) as any)?.count || 0;
+    const closedTickets = (sqlite.prepare(`SELECT COUNT(*) as count FROM maintenance_tickets WHERE is_deleted = 0 AND status = 'CLOSED'${colFilter}`).get(...params) as any)?.count || 0;
+    const downtimeEquip = (sqlite.prepare(`SELECT COUNT(*) as count FROM equipment WHERE is_deleted = 0 AND status IN ('NEEDS_MAINTENANCE', 'UNDER_MAINTENANCE', 'OUT_OF_SERVICE')${colFilter}`).get(...params) as any)?.count || 0;
+
+    res.json({
+      total,
+      openTickets,
+      inProgress,
+      highPriority,
+      closedTickets,
+      downtimeEquip,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 12.9 CHANGE REQUESTS & RESCHEDULING APIS
+// ==========================================
+
+// GET /api/change-requests
+app.get('/api/change-requests', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { status, collegeId, departmentId } = req.query;
+    let query = 'SELECT * FROM change_requests WHERE 1=1';
+    const params: any[] = [];
+
+    if (req.user!.role === 'OWNER') {
+      if (collegeId) { query += ' AND college_id = ?'; params.push(collegeId); }
+      if (departmentId) { query += ' AND department_id = ?'; params.push(departmentId); }
+    } else if (req.user!.role === 'COLLEGE_DEAN' || req.user!.role === 'COLLEGE_MONITOR') {
+      query += ' AND college_id = ?';
+      params.push(req.user!.assignedCollegeId);
+      if (departmentId) { query += ' AND department_id = ?'; params.push(departmentId); }
+    } else if (req.user!.role === 'DEPARTMENT_MONITOR') {
+      query += ' AND department_id = ?';
+      params.push(req.user!.assignedDepartmentId);
+    } else if (req.user!.role === 'FACULTY') {
+      query += ' AND (faculty_id = ? OR requested_by_user_id = ?)';
+      params.push(req.user!.assignedFacultyId || req.user!.id, req.user!.id);
+    }
+
+    if (status && status !== 'all') {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+
+    query += ' ORDER BY created_at DESC';
+    const list = sqlite.prepare(query).all(...params);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/change-requests
+app.post('/api/change-requests', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { scheduleId, changeType, reasonType, reason, proposedDate, proposedDay, proposedStartTime, proposedEndTime, proposedRoomId } = req.body;
+    if (!scheduleId || !changeType || !reason) {
+      return res.status(400).json({ message: 'المحاضرة ونوع الطلب والسبب حقول مطلوبة' });
+    }
+
+    const sched = sqlite.prepare('SELECT * FROM schedules WHERE id = ? AND is_deleted = 0').get(scheduleId) as any;
+    if (!sched) {
+      return res.status(404).json({ message: 'المحاضرة المحددة غير موجودة' });
+    }
+
+    // Role verification
+    let facultyId = sched.faculty_id;
+    if (req.user!.role === 'FACULTY') {
+      if (req.user!.assignedFacultyId && sched.faculty_id !== req.user!.assignedFacultyId) {
+        return res.status(403).json({ message: 'لا يمكنك تقديم طلب تغيير لمحاضرة تخص تدريسياً آخر' });
+      }
+      facultyId = req.user!.assignedFacultyId || sched.faculty_id;
+    }
+
+    const id = generateId('cr');
+    const now = new Date().toISOString();
+
+    sqlite.prepare(`
+      INSERT INTO change_requests (
+        id, schedule_id, faculty_id, college_id, department_id, change_type, reason_type,
+        reason, proposed_date, proposed_day, proposed_start_time, proposed_end_time, proposed_room_id,
+        status, requested_by_user_id, requested_by_name, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?)
+    `).run(
+      id, scheduleId, facultyId, sched.college_id, sched.department_id, changeType, reasonType || changeType,
+      reason, proposedDate || null, proposedDay || null, proposedStartTime || null, proposedEndTime || null, proposedRoomId || null,
+      req.user!.id, req.user!.name, now, now
+    );
+
+    // Notify college monitor & dean update
+    const colMonitor = sqlite.prepare("SELECT id FROM users WHERE role = 'COLLEGE_MONITOR' AND assigned_college_id = ?").get(sched.college_id) as any;
+    if (colMonitor) {
+      sqlite.prepare(`
+        INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
+        VALUES (?, ?, ?, ?, 'CHANGE_REQUEST', 0, ?)
+      `).run(generateId('notif'), colMonitor.id, 'طلب تغيير/تأجيل محاضرة جديد', `قدم التدريسي طلب (${changeType}) بانتظار مراجعتكم`, now);
+    }
+
+    sqlite.prepare(`
+      INSERT INTO dean_updates (id, college_id, type, title, message, entity_id, is_read, created_at)
+      VALUES (?, ?, 'new_change_request', ?, ?, ?, 0, ?)
+    `).run(generateId('du'), sched.college_id, 'طلب تأجيل أو تغيير محاضرة', `تم تقديم طلب جديد من قبل ${req.user!.name} لجدول المحاضرة ${scheduleId}`, id, now);
+
+    await db.insert(auditLogs).values({
+      id: generateId('audit-cr'),
+      userId: req.user!.id,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'CREATE_CHANGE_REQUEST',
+      entity: 'change_requests',
+      entityId: id,
+      details: `تقديم طلب (${changeType}) للمحاضرة ${scheduleId}: ${reason}`,
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
+
+    res.status(201).json({ success: true, message: 'تم إرسال طلب التغيير بنجاح لمسؤول المتابعة', id });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// POST /api/change-requests/:id/review
+app.post('/api/change-requests/:id/review', authenticateToken, requireRole('OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { status, reviewNotes } = req.body; // status: 'approved' | 'rejected' | 'returned'
+
+    const cr = sqlite.prepare('SELECT * FROM change_requests WHERE id = ?').get(id) as any;
+    if (!cr) {
+      return res.status(404).json({ message: 'طلب التغيير غير موجود' });
+    }
+
+    // Role & College Scope check
+    if ((req.user!.role === 'COLLEGE_MONITOR' || req.user!.role === 'COLLEGE_DEAN') && cr.college_id !== req.user!.assignedCollegeId) {
+      return res.status(403).json({ message: 'غير مصرح بمراجعة طلبات كليات أخرى' });
+    }
+
+    // Prevent self-approval
+    if (cr.requested_by_user_id === req.user!.id) {
+      return res.status(403).json({ message: 'لا يمكن اعتماد طلب التغيير المقدم من قبلك بنفسك' });
+    }
+
+    const now = new Date().toISOString();
+
+    if (status === 'approved') {
+      // Check conflict if changing day, time, or room
+      const targetDay = cr.proposed_day;
+      const targetStart = cr.proposed_start_time;
+      const targetEnd = cr.proposed_end_time;
+      const targetRoom = cr.proposed_room_id;
+
+      if (targetDay && targetStart && targetEnd && targetRoom) {
+        const conflict = sqlite.prepare(`
+          SELECT id FROM schedules
+          WHERE id != ? AND room_id = ? AND day = ? AND is_deleted = 0
+            AND start_time < ? AND end_time > ?
+        `).get(cr.schedule_id, targetRoom, targetDay, targetEnd, targetStart) as any;
+
+        if (conflict) {
+          return res.status(409).json({ message: 'تعذر قبول الطلب: القاعة البديلة مشغولة بمحاضرة أخرى في هذا التوقيت!' });
+        }
+
+        // Apply changes to schedule if requested
+        sqlite.prepare(`
+          UPDATE schedules SET
+            day = COALESCE(?, day),
+            start_time = COALESCE(?, start_time),
+            end_time = COALESCE(?, end_time),
+            room_id = COALESCE(?, room_id),
+            updated_at = ?
+          WHERE id = ?
+        `).run(targetDay, targetStart, targetEnd, targetRoom, now, cr.schedule_id);
+      }
+    }
+
+    sqlite.prepare(`
+      UPDATE change_requests SET
+        status = ?,
+        reviewed_by_user_id = ?,
+        reviewed_by_name = ?,
+        reviewed_at = ?,
+        review_notes = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(status, req.user!.id, req.user!.name, now, reviewNotes || null, now, id);
+
+    // Notify requester
+    const decisionAr = status === 'approved' ? 'الموافقة على' : status === 'rejected' ? 'رفض' : 'إعادة استكمال';
+    sqlite.prepare(`
+      INSERT INTO notifications (id, user_id, title, message, type, is_read, created_at)
+      VALUES (?, ?, ?, ?, 'CHANGE_REQUEST_DECISION', 0, ?)
+    `).run(
+      generateId('notif'),
+      cr.requested_by_user_id,
+      `قرار بخصوص طلب التغيير: تم ${decisionAr} طلبك`,
+      reviewNotes ? `ملاحظة المراجع: ${reviewNotes}` : `تمت مراجعة طلبك وتحديث حالته إلى (${decisionAr})`,
+      now
+    );
+
+    // Dean update
+    const deanType = status === 'approved' ? 'change_request_approved' : 'change_request_rejected';
+    sqlite.prepare(`
+      INSERT INTO dean_updates (id, college_id, type, title, message, entity_id, is_read, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, 0, ?)
+    `).run(generateId('du'), cr.college_id, deanType, `قرار بخصوص طلب تغيير محاضرة (${decisionAr})`, `قام ${req.user!.name} باتخاذ قرار (${decisionAr}) على طلب المحاضرة`, id, now);
+
+    await db.insert(auditLogs).values({
+      id: generateId('audit-cr-rev'),
+      userId: req.user!.id,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'REVIEW_CHANGE_REQUEST',
+      entity: 'change_requests',
+      entityId: id,
+      details: `قرار (${status}) على طلب التغيير ${id} مع ملاحظة: ${reviewNotes || '—'}`,
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
+
+    res.json({ success: true, message: `تم تسجيل القرار بنجاح (${status})` });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ==========================================
+// 12.10 DEAN UPDATES APIS
+// ==========================================
+app.get('/api/dean-updates', authenticateToken, requireRole('OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { collegeId } = req.query;
+    let query = 'SELECT * FROM dean_updates WHERE 1=1';
+    const params: any[] = [];
+    if (req.user!.role === 'COLLEGE_DEAN' || req.user!.role === 'COLLEGE_MONITOR') {
+      query += ' AND college_id = ?';
+      params.push(req.user!.assignedCollegeId);
+    } else if (collegeId) {
+      query += ' AND college_id = ?';
+      params.push(collegeId);
+    }
+    query += ' ORDER BY created_at DESC LIMIT 50';
+    const list = sqlite.prepare(query).all(...params);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/dean-updates/:id/read', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    sqlite.prepare('UPDATE dean_updates SET is_read = 1 WHERE id = ?').run(id);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ==========================================
+// 12.11 ACADEMIC CALENDAR APIS
+// ==========================================
+app.get('/api/academic-calendar', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const list = sqlite.prepare('SELECT * FROM academic_calendar_events ORDER BY start_date ASC').all();
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/academic-calendar', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { title, description, eventType, startDate, endDate, academicYear, semester, collegeId } = req.body;
+    if (!title || !startDate || !eventType) {
+      return res.status(400).json({ message: 'عنوان الحدث ونوعه وتاريخ البدء حقول مطلوبة' });
+    }
+    const id = generateId('cal');
+    const now = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO academic_calendar_events (
+        id, title, description, event_type, start_date, end_date, academic_year, semester, college_id, created_by_user_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, title, description || null, eventType, startDate, endDate || null, academicYear || null, semester || null, collegeId || null, req.user!.id, now, now);
+
+    res.status(201).json({ success: true, message: 'تمت إضافة الحدث إلى التقويم الدراسي', id });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.delete('/api/academic-calendar/:id', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    sqlite.prepare('DELETE FROM academic_calendar_events WHERE id = ?').run(id);
+    res.json({ success: true, message: 'تم حذف الحدث من التقويم' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ==========================================
+// 12.12 ROLES & PERMISSIONS APIS (OWNER)
+// ==========================================
+app.get('/api/roles', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const list = sqlite.prepare('SELECT * FROM roles ORDER BY is_system DESC, name ASC').all();
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/permissions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const list = sqlite.prepare('SELECT * FROM permissions ORDER BY category ASC, code ASC').all();
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/roles/:id/permissions', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const list = sqlite.prepare(`
+      SELECT rp.id, rp.role_id, rp.permission_id, rp.granted, p.code, p.name_ar, p.category
+      FROM role_permissions rp
+      JOIN permissions p ON rp.permission_id = p.id
+      WHERE rp.role_id = ?
+    `).all(id);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/roles/:id/permissions', authenticateToken, requireRole('OWNER'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { permissionId, granted } = req.body;
+    const existing = sqlite.prepare('SELECT id FROM role_permissions WHERE role_id = ? AND permission_id = ?').get(id, permissionId) as any;
+    const now = new Date().toISOString();
+    if (existing) {
+      sqlite.prepare('UPDATE role_permissions SET granted = ? WHERE id = ?').run(granted ? 1 : 0, existing.id);
+    } else {
+      sqlite.prepare('INSERT INTO role_permissions (id, role_id, permission_id, granted, created_at) VALUES (?, ?, ?, ?, ?)').run(generateId('rp'), id, permissionId, granted ? 1 : 0, now);
+    }
+    res.json({ success: true, message: 'تم تحديث صلاحية الدور بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ==========================================
+// 12.13 DEVICE MANAGEMENT APIS
+// ==========================================
+app.get('/api/devices', authenticateToken, async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.query;
+    let query = 'SELECT * FROM user_devices WHERE 1=1';
+    const params: any[] = [];
+    if (req.user!.role !== 'OWNER') {
+      query += ' AND user_id = ?';
+      params.push(req.user!.id);
+    } else if (userId) {
+      query += ' AND user_id = ?';
+      params.push(userId);
+    }
+    query += ' ORDER BY last_used_at DESC, created_at DESC';
+    const list = sqlite.prepare(query).all(...params);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/devices/:id/approve', authenticateToken, requireRole('OWNER'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const now = new Date().toISOString();
+    sqlite.prepare("UPDATE user_devices SET status = 'APPROVED', is_trusted = 1, approved_by = ?, approved_at = ? WHERE id = ?").run(req.user!.name, now, id);
+    res.json({ success: true, message: 'تم اعتماد وتوثيق الجهاز بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/devices/:id/revoke', authenticateToken, requireRole('OWNER'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const now = new Date().toISOString();
+    sqlite.prepare("UPDATE user_devices SET status = 'REVOKED', is_trusted = 0, revoked_by = ?, revoked_at = ? WHERE id = ?").run(req.user!.name, now, id);
+    res.json({ success: true, message: 'تم سحب الثقة وإلغاء الجهاز بنجاح' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ==========================================
+// 12.14 REGISTRATION REQUESTS & EMAIL VERIFICATION
+// ==========================================
+app.post('/api/auth/register-request', async (req: Request, res: Response) => {
+  try {
+    const { name, email, employeeId, phone, collegeId, departmentId, requestedRole } = req.body;
+    if (!name || !email) {
+      return res.status(400).json({ success: false, message: 'الاسم والبريد الإلكتروني حقول مطلوبة' });
+    }
+
+    const emailClean = email.toLowerCase().trim();
+    const existingUser = sqlite.prepare('SELECT id FROM users WHERE email = ?').get(emailClean);
+    if (existingUser) {
+      return res.status(409).json({ success: false, message: 'البريد الإلكتروني مستخدم بالفعل بحساب نشط' });
+    }
+
+    const id = generateId('req');
+    const now = new Date().toISOString();
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString(); // 15 mins expiry
+
+    sqlite.prepare(`
+      INSERT INTO registration_requests (
+        id, name, email, employee_id, phone, college_id, department_id, requested_role,
+        is_email_verified, status, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'PENDING_VERIFICATION', ?, ?)
+    `).run(id, name, emailClean, employeeId || null, phone || null, collegeId || null, departmentId || null, requestedRole || 'FACULTY', now, now);
+
+    sqlite.prepare(`
+      INSERT INTO email_verification_codes (id, email, request_id, code, attempts, is_used, expires_at, created_at)
+      VALUES (?, ?, ?, ?, 0, 0, ?, ?)
+    `).run(generateId('evc'), emailClean, id, code, expiresAt, now);
+
+    console.log(`[EMAIL VERIFICATION CODE] Sent to ${emailClean}: ${code}`);
+
+    res.status(201).json({
+      success: true,
+      requestId: id,
+      message: 'تم تسجيل الطلب وإرسال رمز التحقق (مكون من 6 أرقام) إلى بريدك الإلكتروني',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/auth/verify-email', async (req: Request, res: Response) => {
+  try {
+    const { email, requestId, code } = req.body;
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'رمز التحقق مطلوب' });
+    }
+
+    let query = 'SELECT * FROM email_verification_codes WHERE is_used = 0';
+    const params: any[] = [];
+    if (requestId) {
+      query += ' AND request_id = ?';
+      params.push(requestId);
+    } else if (email) {
+      query += ' AND email = ?';
+      params.push(email.toLowerCase().trim());
+    } else {
+      return res.status(400).json({ success: false, message: 'معرف الطلب أو البريد الإلكتروني مطلوب' });
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT 1';
+    const record = sqlite.prepare(query).get(...params) as any;
+
+    if (!record) {
+      return res.status(404).json({ success: false, message: 'رمز التحقق غير موجود أو تم استخدامه مسبقاً' });
+    }
+
+    if (new Date(record.expires_at) < new Date()) {
+      return res.status(400).json({ success: false, message: 'انتهت صلاحية رمز التحقق، يرجى طلب رمز جديد' });
+    }
+
+    if (record.attempts >= 5) {
+      return res.status(429).json({ success: false, message: 'تم تجاوز الحد الأقصى للمحاولات الخاطئة (5 محاولات)' });
+    }
+
+    if (record.code !== code.trim()) {
+      sqlite.prepare('UPDATE email_verification_codes SET attempts = attempts + 1 WHERE id = ?').run(record.id);
+      return res.status(400).json({ success: false, message: 'رمز التحقق غير صحيح' });
+    }
+
+    const now = new Date().toISOString();
+    sqlite.prepare('UPDATE email_verification_codes SET is_used = 1 WHERE id = ?').run(record.id);
+    sqlite.prepare("UPDATE registration_requests SET is_email_verified = 1, email_verified_at = ?, status = 'PENDING_APPROVAL', updated_at = ? WHERE id = ?").run(now, now, record.request_id);
+
+    res.json({
+      success: true,
+      message: 'تم التحقق من البريد بنجاح! تم تحويل طلب الحساب إلى الإدارة للموافقة والاعتماد',
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/auth/resend-code', async (req: Request, res: Response) => {
+  try {
+    const { requestId } = req.body;
+    const reqRow = sqlite.prepare('SELECT * FROM registration_requests WHERE id = ?').get(requestId) as any;
+    if (!reqRow) {
+      return res.status(404).json({ success: false, message: 'طلب التسجيل غير موجود' });
+    }
+
+    const now = new Date().toISOString();
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+
+    sqlite.prepare(`
+      INSERT INTO email_verification_codes (id, email, request_id, code, attempts, is_used, expires_at, created_at)
+      VALUES (?, ?, ?, ?, 0, 0, ?, ?)
+    `).run(generateId('evc'), reqRow.email, requestId, code, expiresAt, now);
+
+    console.log(`[RESEND EMAIL VERIFICATION CODE] Sent to ${reqRow.email}: ${code}`);
+    res.json({ success: true, message: 'تم إرسال رمز تحقق جديد إلى بريدك الإلكتروني' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/registration-requests', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { status } = req.query;
+    let query = 'SELECT * FROM registration_requests WHERE 1=1';
+    const params: any[] = [];
+    if (req.user!.role === 'COLLEGE_MONITOR' && req.user!.assignedCollegeId) {
+      query += ' AND college_id = ?';
+      params.push(req.user!.assignedCollegeId);
+    }
+    if (status) {
+      query += ' AND status = ?';
+      params.push(status);
+    }
+    query += ' ORDER BY created_at DESC';
+    const list = sqlite.prepare(query).all(...params);
+    res.json(list);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/api/registration-requests/:id/approve', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+
+    const r = sqlite.prepare('SELECT * FROM registration_requests WHERE id = ?').get(id) as any;
+    if (!r) {
+      return res.status(404).json({ message: 'طلب التسجيل غير موجود' });
+    }
+
+    if (!r.is_email_verified) {
+      return res.status(400).json({ message: 'لا يمكن تفعيل حساب لم يتم التحقق من بريده الإلكتروني بعد' });
+    }
+
+    const assignedRole = role || r.requested_role || 'FACULTY';
+    const tempPassword = `Uomus@${Math.floor(100000 + Math.random() * 900000)}`;
+    const passwordHash = await bcrypt.hash(tempPassword, 10);
+    const userId = generateId('user');
+    const now = new Date().toISOString();
+
+    sqlite.prepare(`
+      INSERT INTO users (
+        id, uid, name, email, role, role_title_ar, employee_id, phone,
+        assigned_college_id, assigned_department_id, must_change_password, status, token_version, password_hash, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'active', 0, ?, ?, ?)
+    `).run(
+      userId, generateId('uid'), r.name, r.email, assignedRole,
+      assignedRole === 'FACULTY' ? 'تدريسي' : assignedRole === 'DEPARTMENT_MONITOR' ? 'مسؤول قسم' : 'مسؤول كلية',
+      r.employee_id || null, r.phone || null, r.college_id || null, r.department_id || null,
+      passwordHash, now, now
+    );
+
+    sqlite.prepare(`
+      UPDATE registration_requests SET
+        status = 'APPROVED',
+        assigned_role = ?,
+        reviewed_by_user_id = ?,
+        reviewed_by_name = ?,
+        reviewed_at = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(assignedRole, req.user!.id, req.user!.name, now, now, id);
+
+    await db.insert(auditLogs).values({
+      id: generateId('audit-appr-req'),
+      userId: req.user!.id,
+      userName: req.user!.name,
+      userRole: req.user!.role,
+      action: 'APPROVE_USER_REGISTRATION',
+      entity: 'users',
+      entityId: userId,
+      details: `الموافقة على تسجيل المستخدم: ${r.name} (${r.email}) بدور: ${assignedRole}`,
+      timestamp: new Date(),
+      createdAt: new Date(),
+    });
+
+    res.json({
+      success: true,
+      message: `تمت الموافقة بنجاح وإنشاء الحساب! كلمة المرور المؤقتة: ${tempPassword}`,
+      tempPassword,
+    });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+app.post('/api/registration-requests/:id/reject', authenticateToken, requireRole('OWNER', 'COLLEGE_MONITOR'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const now = new Date().toISOString();
+
+    sqlite.prepare(`
+      UPDATE registration_requests SET
+        status = 'REJECTED',
+        approval_notes = ?,
+        reviewed_by_user_id = ?,
+        reviewed_by_name = ?,
+        reviewed_at = ?,
+        updated_at = ?
+      WHERE id = ?
+    `).run(reason || 'لم يستوفِ الشروط', req.user!.id, req.user!.name, now, now, id);
+
+    res.json({ success: true, message: 'تم رفض طلب التسجيل' });
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
 });
 
 // ==========================================

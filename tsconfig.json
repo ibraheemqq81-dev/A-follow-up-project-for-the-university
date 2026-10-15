@@ -23,7 +23,9 @@
     },
     "allowImportingTsExtensions": true,
     "strictNullChecks": false,
+    "noImplicitAny": false,
     "noEmit": true
   },
-  "exclude": ["portable-package", "test-run", "test-run-2", "test-run-3"]
+  "include": ["src", "server.ts", "vite.config.ts"],
+  "exclude": ["portable-package", "test-run", "test-run-2", "test-run-3", "supabase", "dist", "node_modules"]
 }

@@ -1,0 +1,73 @@
+{
+  "id": "/",
+  "name": "جامعة المستقبل — نظام متابعة حضور التدريسيين والمحاضرات",
+  "short_name": "حضور المستقبل",
+  "description": "Al-Mustaqbal University — Academic Attendance & Monitoring System: نظام متكامل لإدارة ومتابعة حضور التدريسيين، الكليات، الأقسام، القاعات، الجداول والاستثناءات الأكاديمية",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "dir": "rtl",
+  "lang": "ar",
+  "theme_color": "#059669",
+  "background_color": "#0f172a",
+  "categories": ["education", "productivity", "management"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "بوابة حضور التدريسيين",
+      "short_name": "تسجيل الحضور",
+      "description": "تسجيل وتوثيق حضور المحاضرة للتدريسيين",
+      "url": "/?tab=attendance",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "الجدول الأسبوعي للمحاضرات",
+      "short_name": "الجدول الأسبوعي",
+      "description": "استعراض ومتابعة جدول المحاضرات والقاعات",
+      "url": "/?tab=schedules",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "المتابعة الحية المباشرة",
+      "short_name": "المتابعة الحية",
+      "description": "مراقبة القاعات والمحاضرات الجارية حالياً",
+      "url": "/?tab=monitoring",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

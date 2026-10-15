@@ -144,6 +144,7 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
 
   // Load offline queue from localStorage on mount
   useEffect(() => {
@@ -157,7 +158,7 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
     }
   }, []);
 
-  // Sync offline queue when online
+  // Sync offline queue when online with strict duplicate protection
   const syncOfflineQueue = useCallback(async () => {
     if (!navigator.onLine || isSyncing) return;
     const storedQueueStr = localStorage.getItem('uomus_offline_attendance_queue');
@@ -174,8 +175,18 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
       for (const item of queue) {
         try {
           await api.recordAttendance(item);
-        } catch {
-          remainingQueue.push(item);
+        } catch (err: any) {
+          // Prevent duplicates: If server responds that this record already exists (409 Conflict), discard from queue safely
+          const isDuplicate =
+            err?.status === 409 ||
+            (typeof err?.message === 'string' &&
+              (err.message.includes('مسبقاً') || err.message.includes('تكرار')));
+
+          if (isDuplicate) {
+            console.log('[Sync] Record already registered on server; preventing duplicate:', item.scheduleId);
+          } else {
+            remainingQueue.push(item);
+          }
         }
       }
 

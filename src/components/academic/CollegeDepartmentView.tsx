@@ -89,7 +89,7 @@ export const CollegeDepartmentView: React.FC = () => {
     }
   };
 
-  const getCollegeName = (id: string) => colleges.find((c) => c.id === id)?.nameAr || 'كلية عامة';
+  const getCollegeName = (id: string) => (Array.isArray(colleges) ? colleges : []).find((c) => c && c.id === id)?.nameAr || 'كلية عامة';
 
   return (
     <div className="space-y-6">

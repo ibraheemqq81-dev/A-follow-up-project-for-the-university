@@ -473,8 +473,13 @@ export const ImportCenter: React.FC = () => {
         count: res.count,
         created: res.created,
         updated: res.updated,
-        jobId: res.jobId,
-        errors: res.errors,
+        errors: res.errors
+          ? res.errors.map((e: any, idx: number) =>
+              typeof e === 'string'
+                ? { row: idx + 1, field: 'بيانات', message: e }
+                : { row: e?.row || idx + 1, field: e?.field || 'بيانات', message: e?.message || String(e) }
+            )
+          : undefined,
       });
       if (res.success !== false) {
         setParsedData([]);

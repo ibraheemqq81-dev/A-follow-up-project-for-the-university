@@ -428,3 +428,176 @@ export const importErrors = sqliteTable('import_errors', {
   rawValue: text('raw_value'),
   createdAt: customTimestamp('created_at'),
 });
+
+export const equipment = sqliteTable('equipment', {
+  id: text('id').primaryKey(),
+  collegeId: text('college_id').notNull(),
+  departmentId: text('department_id'),
+  roomId: text('room_id'),
+  buildingId: text('building_id'),
+  code: text('code'),
+  nameAr: text('name_ar').notNull(),
+  nameEn: text('name_en'),
+  type: text('type').notNull(), // COMPUTER, PROJECTOR, AIR_CONDITIONER, LAB_DEVICE, SMART_BOARD, NETWORK, OTHER
+  status: text('status').default('OPERATIONAL'), // OPERATIONAL, NEEDS_MAINTENANCE, UNDER_MAINTENANCE, OUT_OF_SERVICE
+  serialNumber: text('serial_number'),
+  specifications: text('specifications'),
+  purchaseDate: text('purchase_date'),
+  photoPath: text('photo_path'),
+  notes: text('notes'),
+  isDeleted: integer('is_deleted', { mode: 'boolean' }).default(false),
+  createdAt: customTimestamp('created_at'),
+  updatedAt: customTimestamp('updated_at'),
+});
+
+export const maintenanceTickets = sqliteTable('maintenance_tickets', {
+  id: text('id').primaryKey(),
+  ticketNumber: text('ticket_number').unique().notNull(),
+  equipmentId: text('equipment_id'),
+  collegeId: text('college_id').notNull(),
+  departmentId: text('department_id'),
+  roomId: text('room_id'),
+  buildingId: text('building_id'),
+  reportedByUserId: text('reported_by_user_id').notNull(),
+  reportedByName: text('reported_by_name').notNull(),
+  title: text('title').notNull(),
+  description: text('description').notNull(),
+  priority: text('priority').default('MEDIUM'), // LOW, MEDIUM, HIGH, EMERGENCY
+  impactOnLectures: text('impact_on_lectures').default('NONE'), // NONE, PARTIAL, CRITICAL_STOPPAGE
+  status: text('status').default('NEW'), // NEW, UNDER_REVIEW, ASSIGNED_MAINTENANCE, IN_PROGRESS, WAITING_PARTS, REPAIRED, CLOSED
+  assignedTeam: text('assigned_team'),
+  actionTaken: text('action_taken'),
+  resolutionNotes: text('resolution_notes'),
+  resolutionDate: text('resolution_date'),
+  photoUrl: text('photo_url'),
+  isDeleted: integer('is_deleted', { mode: 'boolean' }).default(false),
+  createdAt: customTimestamp('created_at'),
+  updatedAt: customTimestamp('updated_at'),
+});
+
+export const changeRequests = sqliteTable('change_requests', {
+  id: text('id').primaryKey(),
+  scheduleId: text('schedule_id').notNull(),
+  facultyId: text('faculty_id').notNull(),
+  collegeId: text('college_id').notNull(),
+  departmentId: text('department_id').notNull(),
+  changeType: text('change_type').notNull(),
+  reasonType: text('reason_type'),
+  reason: text('reason').notNull(),
+  proposedDate: text('proposed_date'),
+  proposedDay: text('proposed_day'),
+  proposedStartTime: text('proposed_start_time'),
+  proposedEndTime: text('proposed_end_time'),
+  proposedRoomId: text('proposed_room_id'),
+  status: text('status').default('pending'), // pending, approved, rejected, returned, applied
+  requestedByUserId: text('requested_by_user_id').notNull(),
+  requestedByName: text('requested_by_name').notNull(),
+  reviewedByUserId: text('reviewed_by_user_id'),
+  reviewedByName: text('reviewed_by_name'),
+  reviewedAt: text('reviewed_at'),
+  reviewNotes: text('review_notes'),
+  createdAt: customTimestamp('created_at'),
+  updatedAt: customTimestamp('updated_at'),
+});
+
+export const userDevices = sqliteTable('user_devices', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  deviceName: text('device_name').notNull(),
+  deviceType: text('device_type'),
+  browser: text('browser'),
+  os: text('os'),
+  ipAddress: text('ip_address'),
+  status: text('status').default('APPROVED'), // PENDING, APPROVED, REVOKED
+  isTrusted: integer('is_trusted', { mode: 'boolean' }).default(true),
+  lastUsedAt: text('last_used_at'),
+  approvedBy: text('approved_by'),
+  approvedAt: text('approved_at'),
+  revokedBy: text('revoked_by'),
+  revokedAt: text('revoked_at'),
+  createdAt: customTimestamp('created_at'),
+});
+
+export const registrationRequests = sqliteTable('registration_requests', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').unique().notNull(),
+  employeeId: text('employee_id'),
+  phone: text('phone'),
+  collegeId: text('college_id'),
+  departmentId: text('department_id'),
+  requestedRole: text('requested_role').default('FACULTY'),
+  assignedRole: text('assigned_role'),
+  isEmailVerified: integer('is_email_verified', { mode: 'boolean' }).default(false),
+  emailVerifiedAt: text('email_verified_at'),
+  status: text('status').default('PENDING_VERIFICATION'), // PENDING_VERIFICATION, PENDING_APPROVAL, APPROVED, REJECTED
+  approvalNotes: text('approval_notes'),
+  reviewedByUserId: text('reviewed_by_user_id'),
+  reviewedByName: text('reviewed_by_name'),
+  reviewedAt: text('reviewed_at'),
+  createdAt: customTimestamp('created_at'),
+  updatedAt: customTimestamp('updated_at'),
+});
+
+export const emailVerificationCodes = sqliteTable('email_verification_codes', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  requestId: text('request_id'),
+  code: text('code').notNull(),
+  attempts: integer('attempts').default(0),
+  isUsed: integer('is_used', { mode: 'boolean' }).default(false),
+  expiresAt: text('expires_at').notNull(),
+  createdAt: customTimestamp('created_at'),
+});
+
+export const academicCalendarEvents = sqliteTable('academic_calendar_events', {
+  id: text('id').primaryKey(),
+  title: text('title').notNull(),
+  description: text('description'),
+  eventType: text('event_type').notNull(), // EXAM, HOLIDAY, SEMESTER_START, SEMESTER_END, DEADLINE, EVENT
+  startDate: text('start_date').notNull(),
+  endDate: text('end_date'),
+  academicYear: text('academic_year'),
+  semester: text('semester'),
+  collegeId: text('college_id'),
+  createdByUserId: text('created_by_user_id'),
+  createdAt: customTimestamp('created_at'),
+  updatedAt: customTimestamp('updated_at'),
+});
+
+export const deanUpdates = sqliteTable('dean_updates', {
+  id: text('id').primaryKey(),
+  collegeId: text('college_id').notNull(),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  entityId: text('entity_id'),
+  isRead: integer('is_read', { mode: 'boolean' }).default(false),
+  createdAt: customTimestamp('created_at'),
+});
+
+export const roles = sqliteTable('roles', {
+  id: text('id').primaryKey(),
+  name: text('name').unique().notNull(),
+  nameAr: text('name_ar').notNull(),
+  description: text('description'),
+  isSystem: integer('is_system', { mode: 'boolean' }).default(true),
+  createdAt: customTimestamp('created_at'),
+});
+
+export const permissions = sqliteTable('permissions', {
+  id: text('id').primaryKey(),
+  code: text('code').unique().notNull(),
+  nameAr: text('name_ar').notNull(),
+  category: text('category').notNull(),
+  description: text('description'),
+});
+
+export const rolePermissions = sqliteTable('role_permissions', {
+  id: text('id').primaryKey(),
+  roleId: text('role_id').notNull(),
+  permissionId: text('permission_id').notNull(),
+  granted: integer('granted', { mode: 'boolean' }).default(true),
+  createdAt: customTimestamp('created_at'),
+});
+

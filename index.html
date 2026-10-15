@@ -2,21 +2,35 @@
 <html lang="ar" dir="rtl">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
+    <meta name="theme-color" content="#059669" />
+    
+    <!-- PWA & Mobile Web App Capable -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="حضور المستقبل" />
+    <meta name="application-name" content="جامعة المستقبل — حضور التدريسيين" />
+
+    <!-- Web App Manifest -->
     <link rel="manifest" href="/manifest.webmanifest" />
+
+    <!-- Touch & Favicon Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="icon" type="image/png" sizes="64x64" href="/favicon.png" />
+
     <title>جامعة المستقبل — نظام متابعة حضور التدريسيين والمحاضرات</title>
     <meta name="description" content="Al-Mustaqbal University — Academic Attendance & Monitoring System: نظام متكامل لإدارة ومتابعة حضور التدريسيين، الكليات، الأقسام، القاعات، الجداول والاستثناءات الأكاديمية" />
     <meta property="og:title" content="جامعة المستقبل — نظام متابعة حضور التدريسيين والمحاضرات" />
     <meta property="og:description" content="Al-Mustaqbal University — Academic Attendance & Monitoring System: نظام متكامل لإدارة ومتابعة حضور التدريسيين، الكليات، الأقسام، القاعات، الجداول والاستثناءات الأكاديمية" />
     <meta property="og:type" content="website" />
+    <meta property="og:image" content="/pwa-512x512.png" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta property="og:image" content="https://bolt.new/static/og_default.png">
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
-</head>
+    <meta name="twitter:image" content="/pwa-512x512.png" />
+  </head>
   <body class="bg-slate-50 text-slate-900 font-sans antialiased selection:bg-emerald-500 selection:text-white">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

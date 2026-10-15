@@ -394,6 +394,178 @@ function initDatabase() {
       raw_value TEXT,
       created_at TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS equipment (
+      id TEXT PRIMARY KEY,
+      college_id TEXT NOT NULL,
+      department_id TEXT,
+      room_id TEXT,
+      building_id TEXT,
+      code TEXT,
+      name_ar TEXT NOT NULL,
+      name_en TEXT,
+      type TEXT NOT NULL,
+      status TEXT DEFAULT 'OPERATIONAL',
+      serial_number TEXT,
+      specifications TEXT,
+      purchase_date TEXT,
+      photo_path TEXT,
+      notes TEXT,
+      is_deleted INTEGER DEFAULT 0,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS maintenance_tickets (
+      id TEXT PRIMARY KEY,
+      ticket_number TEXT UNIQUE NOT NULL,
+      equipment_id TEXT,
+      college_id TEXT NOT NULL,
+      department_id TEXT,
+      room_id TEXT,
+      building_id TEXT,
+      reported_by_user_id TEXT NOT NULL,
+      reported_by_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      priority TEXT DEFAULT 'MEDIUM',
+      impact_on_lectures TEXT DEFAULT 'NONE',
+      status TEXT DEFAULT 'NEW',
+      assigned_team TEXT,
+      action_taken TEXT,
+      resolution_notes TEXT,
+      resolution_date TEXT,
+      photo_url TEXT,
+      is_deleted INTEGER DEFAULT 0,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS change_requests (
+      id TEXT PRIMARY KEY,
+      schedule_id TEXT NOT NULL,
+      faculty_id TEXT NOT NULL,
+      college_id TEXT NOT NULL,
+      department_id TEXT NOT NULL,
+      change_type TEXT NOT NULL,
+      reason_type TEXT,
+      reason TEXT NOT NULL,
+      proposed_date TEXT,
+      proposed_day TEXT,
+      proposed_start_time TEXT,
+      proposed_end_time TEXT,
+      proposed_room_id TEXT,
+      status TEXT DEFAULT 'pending',
+      requested_by_user_id TEXT NOT NULL,
+      requested_by_name TEXT NOT NULL,
+      reviewed_by_user_id TEXT,
+      reviewed_by_name TEXT,
+      reviewed_at TEXT,
+      review_notes TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS user_devices (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      device_name TEXT NOT NULL,
+      device_type TEXT,
+      browser TEXT,
+      os TEXT,
+      ip_address TEXT,
+      status TEXT DEFAULT 'APPROVED',
+      is_trusted INTEGER DEFAULT 1,
+      last_used_at TEXT,
+      approved_by TEXT,
+      approved_at TEXT,
+      revoked_by TEXT,
+      revoked_at TEXT,
+      created_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS registration_requests (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      email TEXT UNIQUE NOT NULL,
+      employee_id TEXT,
+      phone TEXT,
+      college_id TEXT,
+      department_id TEXT,
+      requested_role TEXT DEFAULT 'FACULTY',
+      assigned_role TEXT,
+      is_email_verified INTEGER DEFAULT 0,
+      email_verified_at TEXT,
+      status TEXT DEFAULT 'PENDING_VERIFICATION',
+      approval_notes TEXT,
+      reviewed_by_user_id TEXT,
+      reviewed_by_name TEXT,
+      reviewed_at TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS email_verification_codes (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL,
+      request_id TEXT,
+      code TEXT NOT NULL,
+      attempts INTEGER DEFAULT 0,
+      is_used INTEGER DEFAULT 0,
+      expires_at TEXT NOT NULL,
+      created_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS academic_calendar_events (
+      id TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      event_type TEXT NOT NULL,
+      start_date TEXT NOT NULL,
+      end_date TEXT,
+      academic_year TEXT,
+      semester TEXT,
+      college_id TEXT,
+      created_by_user_id TEXT,
+      created_at TEXT,
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS dean_updates (
+      id TEXT PRIMARY KEY,
+      college_id TEXT NOT NULL,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      entity_id TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS roles (
+      id TEXT PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      name_ar TEXT NOT NULL,
+      description TEXT,
+      is_system INTEGER DEFAULT 1,
+      created_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS permissions (
+      id TEXT PRIMARY KEY,
+      code TEXT UNIQUE NOT NULL,
+      name_ar TEXT NOT NULL,
+      category TEXT NOT NULL,
+      description TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS role_permissions (
+      id TEXT PRIMARY KEY,
+      role_id TEXT NOT NULL,
+      permission_id TEXT NOT NULL,
+      granted INTEGER DEFAULT 1,
+      created_at TEXT
+    );
   `);
 
   // Run column migrations for SQLite tables
@@ -687,6 +859,106 @@ function initDatabase() {
       ownerHash,
       now,
       now
+    );
+  }
+
+  // Seed default roles if empty
+  const rolesCount = (sqlite.prepare('SELECT COUNT(*) as count FROM roles').get() as any)?.count || 0;
+  if (rolesCount === 0) {
+    const rolesList = [
+      { id: 'role-owner', name: 'OWNER', nameAr: 'مالك النظام ومسؤول الجامعة', desc: 'صلاحيات كاملة وغير مقيدة على مستوى الجامعة' },
+      { id: 'role-dean', name: 'COLLEGE_DEAN', nameAr: 'عميد الكلية', desc: 'إشراف واطلاع ومتابعة على مستوى الكلية' },
+      { id: 'role-col-mon', name: 'COLLEGE_MONITOR', nameAr: 'مسؤول متابعة الكلية', desc: 'متابعة الجداول والحضور وطلبات التأجيل في الكلية' },
+      { id: 'role-dept-mon', name: 'DEPARTMENT_MONITOR', nameAr: 'مسؤول متابعة القسم', desc: 'متابعة وتوثيق الحضور بالنيابة وصيانة القسم' },
+      { id: 'role-faculty', name: 'FACULTY', nameAr: 'عضو هيئة تدريسية', desc: 'توثيق المحاضرات والغيابات وتقديم طلبات التأجيل' },
+    ];
+    for (const r of rolesList) {
+      sqlite.prepare('INSERT INTO roles (id, name, name_ar, description, is_system, created_at) VALUES (?, ?, ?, ?, 1, ?)').run(r.id, r.name, r.nameAr, r.desc, now);
+    }
+
+    const permsList = [
+      { id: 'perm-att-rec', code: 'ATTENDANCE_RECORD', nameAr: 'توثيق الحضور وإثبات المحاضرة', cat: 'الحضور' },
+      { id: 'perm-att-proxy', code: 'ATTENDANCE_PROXY', nameAr: 'تسجيل الحضور بالنيابة مع الضوابط', cat: 'الحضور' },
+      { id: 'perm-att-view', code: 'ATTENDANCE_VIEW', nameAr: 'عرض سجلات وإحصائيات الحضور', cat: 'الحضور' },
+      { id: 'perm-sched-manage', code: 'SCHEDULE_MANAGE', nameAr: 'إدارة وتعديل الجداول الأكاديمية', cat: 'الجداول' },
+      { id: 'perm-cr-create', code: 'CHANGE_REQUEST_CREATE', nameAr: 'تقديم طلبات تأجيل وتغيير المواعيد', cat: 'الطلبات' },
+      { id: 'perm-cr-review', code: 'CHANGE_REQUEST_REVIEW', nameAr: 'الموافقة أو الرفض على طلبات التأجيل', cat: 'الطلبات' },
+      { id: 'perm-equip-view', code: 'EQUIPMENT_VIEW', nameAr: 'الاطلاع على سجل المعدات والأجهزة', cat: 'المعدات والصيانة' },
+      { id: 'perm-equip-manage', code: 'EQUIPMENT_MANAGE', nameAr: 'إضافة وتعديل بيانات الأجهزة والمختبرات', cat: 'المعدات والصيانة' },
+      { id: 'perm-maint-rep', code: 'MAINTENANCE_REPORT', nameAr: 'تسجيل بلاغات الأعطال والصيانة', cat: 'المعدات والصيانة' },
+      { id: 'perm-maint-manage', code: 'MAINTENANCE_MANAGE', nameAr: 'إدارة دورة الصيانة وإغلاق البلاغات', cat: 'المعدات والصيانة' },
+      { id: 'perm-rep-view', code: 'REPORTS_VIEW', nameAr: 'عرض التقارير والموقف اليومي', cat: 'التقارير' },
+      { id: 'perm-users-manage', code: 'USERS_MANAGE', nameAr: 'إدارة المستخدمين والحسابات', cat: 'المستخدمون' },
+      { id: 'perm-sys-settings', code: 'SYSTEM_SETTINGS', nameAr: 'إدارة إعدادات النظام وسياسات الأمان', cat: 'النظام' },
+    ];
+    for (const p of permsList) {
+      sqlite.prepare('INSERT INTO permissions (id, code, name_ar, category) VALUES (?, ?, ?, ?)').run(p.id, p.code, p.nameAr, p.cat);
+    }
+  }
+
+  // Seed default equipment if empty
+  const equipCount = (sqlite.prepare('SELECT COUNT(*) as count FROM equipment').get() as any)?.count || 0;
+  if (equipCount === 0) {
+    const colEng = 'col-eng-01';
+    const depCse = 'dep-cse-01';
+    const bld1 = 'bld-eng-01';
+    const bld2 = 'bld-hall-01';
+    const rm1 = 'rm-khawarizmi';
+    const rm3 = 'rm-lab-net';
+
+    sqlite.prepare(`
+      INSERT INTO equipment (
+        id, college_id, department_id, room_id, building_id, code, name_ar, name_en,
+        type, status, serial_number, specifications, purchase_date, notes, is_deleted, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(
+      'eq-proj-khawarizmi', colEng, depCse, rm1, bld1, 'EQ-PRJ-101', 'عارض بيانات ليزري 4K (Data Projector)', 'Epson 4K Laser Projector',
+      'PROJECTOR', 'OPERATIONAL', 'SN-EP4K-88219', 'شدة إضاءة 5000 شمعة، مدخل HDMI وWireless Casting', '2024-01-15', 'مثبت في سقف قاعة الخوارزمي بحالة ممتازة', now, now
+    );
+
+    sqlite.prepare(`
+      INSERT INTO equipment (
+        id, college_id, department_id, room_id, building_id, code, name_ar, name_en,
+        type, status, serial_number, specifications, purchase_date, notes, is_deleted, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(
+      'eq-ac-khawarizmi', colEng, depCse, rm1, bld1, 'EQ-AC-102', 'مكيف عمودي سبليت 2 طن (Inverter AC)', 'TOSHIBA 2-Ton Inverter AC',
+      'AIR_CONDITIONER', 'NEEDS_MAINTENANCE', 'SN-TOSH-99120', 'غاز R410A موفر للطاقة بتقنية Inverter', '2023-08-10', 'ضعف في التبريد بحاجة لفحص الفلاتر وشحن الغاز', now, now
+    );
+
+    sqlite.prepare(`
+      INSERT INTO equipment (
+        id, college_id, department_id, room_id, building_id, code, name_ar, name_en,
+        type, status, serial_number, specifications, purchase_date, notes, is_deleted, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(
+      'eq-switch-netlab', colEng, depCse, rm3, bld2, 'EQ-SW-201', 'موزع شبكات رئيسي 48 منفذ (Managed Gigabit Switch)', 'Cisco Catalyst 48-Port PoE',
+      'NETWORK', 'OPERATIONAL', 'SN-CS48-11029', 'PoE+ مع دعم VLAN و Layer 3 Routing', '2024-02-01', 'موجود في كابينة الشبكات الخاصة بمختبر الشبكات', now, now
+    );
+
+    sqlite.prepare(`
+      INSERT INTO equipment (
+        id, college_id, department_id, room_id, building_id, code, name_ar, name_en,
+        type, status, serial_number, specifications, purchase_date, notes, is_deleted, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(
+      'eq-pc-netlab-01', colEng, depCse, rm3, bld2, 'EQ-PC-202', 'محطة عمل هندسية ومحاكاة شبكات (Workstation PC)', 'Dell Precision 3660 Core i7',
+      'COMPUTER', 'OPERATIONAL', 'SN-DELL-55210', 'Core i7 13th Gen, 32GB RAM, RTX 3060, 1TB NVMe', '2024-03-10', 'جهاز رقم 1 في المختبر', now, now
+    );
+
+    // Sample maintenance ticket for the AC
+    sqlite.prepare(`
+      INSERT INTO maintenance_tickets (
+        id, ticket_number, equipment_id, college_id, department_id, room_id, building_id,
+        reported_by_user_id, reported_by_name, title, description, priority, impact_on_lectures,
+        status, assigned_team, action_taken, resolution_notes, resolution_date, is_deleted, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `).run(
+      'ticket-001', 'TKT-2025-001', 'eq-ac-khawarizmi', colEng, depCse, rm1, bld1,
+      'user-owner-default', 'د. زينب أحمد علي', 'ضعف كفاءة تبريد المكيف العمودي بقاعة الخوارزمي',
+      'تراكم الأتربة على الفلاتر وضعف التبريد أثناء محاضرات الصباح في قاعة الخوارزمي مما يؤثر على تركيز الطلبة.',
+      'HIGH', 'PARTIAL', 'IN_PROGRESS', 'شعبة الصيانة والخدمات العامة', 'تم فحص الوحدة الخارجية والفلاتر وجاري استبدال المكثف',
+      null, null, now, now
     );
   }
 }

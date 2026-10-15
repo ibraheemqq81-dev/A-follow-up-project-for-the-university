@@ -91,8 +91,8 @@ export const StageSectionView: React.FC = () => {
     }
   };
 
-  const getDeptName = (id?: string) => departments.find((d) => d.id === id)?.nameAr || 'قسم أكاديمي';
-  const getStageName = (id?: string) => stages.find((s) => s.id === id)?.nameAr || 'مرحلة';
+  const getDeptName = (id?: string) => (Array.isArray(departments) ? departments : []).find((d) => d && d.id === id)?.nameAr || 'قسم أكاديمي';
+  const getStageName = (id?: string) => (Array.isArray(stages) ? stages : []).find((s) => s && s.id === id)?.nameAr || 'مرحلة';
 
   return (
     <div className="space-y-6">

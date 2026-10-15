@@ -105,9 +105,10 @@ export const BackupManagement: React.FC<Props> = ({ stats, health, auditLogsCoun
     setIsLoading(true);
     try {
       const data = await api.getBackups();
-      setBackups(data as BackupRow[]);
+      setBackups(Array.isArray(data) ? (data as BackupRow[]) : []);
     } catch (err: any) {
       showAlert('error', err?.message || 'فشل تحميل النسخ الاحتياطية');
+      setBackups([]);
     } finally {
       setIsLoading(false);
     }
@@ -388,7 +389,7 @@ export const BackupManagement: React.FC<Props> = ({ stats, health, auditLogsCoun
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {backups.map((backup) => (
+                {(Array.isArray(backups) ? backups : []).map((backup) => (
                   <tr key={backup.id} className="hover:bg-slate-50/70">
                     <td className="py-3 px-3 font-bold text-slate-900 max-w-xs truncate">{backup.name}</td>
                     <td className="py-3 px-3 text-slate-400 font-mono text-[10px]">{backup.id.slice(0, 12)}...</td>

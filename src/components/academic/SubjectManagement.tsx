@@ -84,7 +84,7 @@ export const SubjectManagement: React.FC = () => {
     }
   };
 
-  const getDeptName = (id?: string) => departments.find((d) => d.id === id)?.nameAr || '';
+  const getDeptName = (id?: string) => (Array.isArray(departments) ? departments : []).find((d) => d && d.id === id)?.nameAr || '';
 
   return (
     <div className="space-y-6">

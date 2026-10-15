@@ -181,10 +181,10 @@ export const ScheduleManagement: React.FC = () => {
     }
   };
 
-  const getFacultyName = (id?: string) => faculty.find((f) => f.id === id)?.nameAr || 'غير محدد';
-  const getSubjectName = (id?: string) => subjects.find((s) => s.id === id)?.nameAr || 'مادة دراسية';
-  const getRoomName = (id?: string) => rooms.find((r) => r.id === id)?.nameAr || 'قاعة';
-  const getDeptName = (id?: string) => departments.find((d) => d.id === id)?.nameAr || '';
+  const getFacultyName = (id?: string) => (Array.isArray(faculty) ? faculty : []).find((f) => f && f.id === id)?.nameAr || 'غير محدد';
+  const getSubjectName = (id?: string) => (Array.isArray(subjects) ? subjects : []).find((s) => s && s.id === id)?.nameAr || 'مادة دراسية';
+  const getRoomName = (id?: string) => (Array.isArray(rooms) ? rooms : []).find((r) => r && r.id === id)?.nameAr || 'قاعة';
+  const getDeptName = (id?: string) => (Array.isArray(departments) ? departments : []).find((d) => d && d.id === id)?.nameAr || '';
 
   // Filtered schedules list
   const filteredSchedules = useMemo(() => {

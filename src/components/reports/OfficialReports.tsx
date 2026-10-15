@@ -77,16 +77,16 @@ export const OfficialReports: React.FC = () => {
   const handlePrint = () => window.print();
 
   const getFacultyName = (id: string) =>
-    faculty.find((f) => f?.id === id)?.nameAr || 'تدريسي';
+    (Array.isArray(faculty) ? faculty : []).find((f) => f?.id === id)?.nameAr || 'تدريسي';
 
   const getCollegeName = (id: string) =>
-    colleges.find((c) => c?.id === id)?.nameAr || '—';
+    (Array.isArray(colleges) ? colleges : []).find((c) => c?.id === id)?.nameAr || '—';
 
   const getDeptName = (id: string) =>
-    departments.find((d) => d?.id === id)?.nameAr || '—';
+    (Array.isArray(departments) ? departments : []).find((d) => d?.id === id)?.nameAr || '—';
 
   const getSubjectName = (id: string) =>
-    subjects.find((s) => s?.id === id)?.nameAr || 'المادة';
+    (Array.isArray(subjects) ? subjects : []).find((s) => s?.id === id)?.nameAr || 'المادة';
 
   // Filter helpers
   const filterByScope = <T extends Record<string, any>>(rows: T[]): T[] => {

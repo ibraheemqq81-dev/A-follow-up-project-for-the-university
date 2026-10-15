@@ -24,6 +24,9 @@ import { ChangeRequestsView } from './components/changes/ChangeRequestsView.tsx'
 import { AcademicCalendarView } from './components/calendar/AcademicCalendarView.tsx';
 import { PermissionsManagement } from './components/permissions/PermissionsManagement.tsx';
 import { DeanUpdatesView } from './components/dean/DeanUpdatesView.tsx';
+import { EquipmentMaintenanceView } from './components/equipment/EquipmentMaintenanceView.tsx';
+import { OfflineStatusBar } from './components/pwa/OfflineStatusBar.tsx';
+import { MobileBottomBar } from './components/layout/MobileBottomBar.tsx';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -93,6 +96,8 @@ const MainLayout: React.FC = () => {
         return <CollegeDepartmentView />;
       case 'rooms':
         return <BuildingRoomView />;
+      case 'equipment':
+        return <EquipmentMaintenanceView />;
       case 'stages':
         return <StageSectionView />;
       case 'subjects':
@@ -121,7 +126,10 @@ const MainLayout: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col" dir="rtl">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col transition-colors" dir="rtl">
+      {/* Real-time Offline & Connectivity Status Notice */}
+      <OfflineStatusBar />
+
       {/* 15-Minute Lecture Reminder Notification Toast */}
       <LectureReminderToast onNavigateToAttendance={handleNavigateToAttendance} />
 
@@ -136,10 +144,17 @@ const MainLayout: React.FC = () => {
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pb-24 lg:pb-8">
           <div className="max-w-7xl mx-auto">{renderContent()}</div>
         </main>
       </div>
+
+      {/* Mobile Bottom Navigation Bar for PWA and Small Screen thumb ergonomics */}
+      <MobileBottomBar
+        activeTab={activeTab}
+        onSelectTab={setActiveTab}
+        onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+      />
     </div>
   );
 };

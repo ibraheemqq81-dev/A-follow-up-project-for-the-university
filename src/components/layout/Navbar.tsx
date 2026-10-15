@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { LogOut, User as UserIcon, Building2, Sun, Moon } from 'lucide-react';
 import { NotificationDropdown } from '../notifications/NotificationDropdown.tsx';
+import { PWAInstallButton } from '../pwa/PWAInstallButton.tsx';
 
 interface NavbarProps {
   onToggleSidebar?: () => void;
@@ -72,6 +73,9 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onNavigateToAtt
           <div className="flex items-center gap-3">
             {user ? (
               <div className="flex items-center gap-2 sm:gap-3">
+                {/* PWA Install Button */}
+                <PWAInstallButton />
+
                 {/* Theme Toggle Button */}
                 <button
                   type="button"

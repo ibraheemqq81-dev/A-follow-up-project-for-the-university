@@ -91,12 +91,12 @@ export const FacultyManagement: React.FC = () => {
     }
   };
 
-  const getDeptName = (id?: string) => departments.find((d) => d.id === id)?.nameAr || '';
-  const getCollegeName = (id?: string) => colleges.find((c) => c.id === id)?.nameAr || '';
+  const getDeptName = (id?: string) => (Array.isArray(departments) ? departments : []).find((d) => d && d.id === id)?.nameAr || '';
+  const getCollegeName = (id?: string) => (Array.isArray(colleges) ? colleges : []).find((c) => c && c.id === id)?.nameAr || '';
 
   // Filtered Faculty List
   const filteredFaculty = useMemo(() => {
-    return faculty.filter((f) => {
+    return (Array.isArray(faculty) ? faculty : []).filter((f) => {
       const matchSearch =
         !searchTerm ||
         f.nameAr?.toLowerCase().includes(searchTerm.toLowerCase()) ||

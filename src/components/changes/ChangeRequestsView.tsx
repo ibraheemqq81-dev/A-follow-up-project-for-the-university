@@ -70,8 +70,8 @@ export const ChangeRequestsView: React.FC = () => {
   const [reviewNotes, setReviewNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const canReview = user?.role === 'OWNER' || user?.role === 'COLLEGE_MONITOR';
-  const canCreate = user?.role === 'OWNER' || user?.role === 'DEPARTMENT_MONITOR' || user?.role === 'COLLEGE_MONITOR';
+  const canReview = user?.role === 'OWNER' || user?.role === 'COLLEGE_MONITOR' || user?.role === 'COLLEGE_DEAN';
+  const canCreate = user?.role === 'OWNER' || user?.role === 'DEPARTMENT_MONITOR' || user?.role === 'COLLEGE_MONITOR' || user?.role === 'COLLEGE_DEAN';
 
   const loadRequests = useCallback(async () => {
     setLoading(true);

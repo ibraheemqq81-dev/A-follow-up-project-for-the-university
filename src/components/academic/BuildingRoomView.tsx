@@ -103,7 +103,7 @@ export const BuildingRoomView: React.FC = () => {
     }
   };
 
-  const getBuildingName = (id?: string) => buildings.find((b) => b.id === id)?.nameAr || 'مبنى جامعي';
+  const getBuildingName = (id?: string) => (Array.isArray(buildings) ? buildings : []).find((b) => b && b.id === id)?.nameAr || 'مبنى جامعي';
 
   return (
     <div className="space-y-6">

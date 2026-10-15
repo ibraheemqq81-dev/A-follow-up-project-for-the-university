@@ -19,6 +19,7 @@ import {
   CalendarDays,
   Shield,
   Bell,
+  Wrench,
 } from 'lucide-react';
 
 export type ActiveTab =
@@ -29,6 +30,7 @@ export type ActiveTab =
   | 'import'
   | 'colleges'
   | 'rooms'
+  | 'equipment'
   | 'stages'
   | 'subjects'
   | 'faculty'
@@ -64,23 +66,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
     roles: string[];
     category?: string;
   }> = [
-    { id: 'attendance', label: 'بوابة حضور التدريسيين', icon: CalendarCheck, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR', 'FACULTY'], category: 'الرئيسية' },
-    { id: 'schedules', label: 'الجدول الأسبوعي للمحاضرات', icon: Calendar, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR', 'FACULTY'], category: 'الرئيسية' },
-    { id: 'dashboard', label: 'لوحة المؤشرات العامة', icon: LayoutDashboard, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الإدارة الأكاديمية' },
-    { id: 'monitoring', label: 'المتابعة الحية المباشرة', icon: Radio, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الإدارة الأكاديمية' },
-    { id: 'import', label: 'مركز الاستيراد', icon: FileSpreadsheet, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الهيكل الأكاديمي' },
-    { id: 'colleges', label: 'الكليات والأقسام', icon: GraduationCap, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'الهيكل الأكاديمي' },
-    { id: 'rooms', label: 'المباني والقاعات الدراسية', icon: DoorOpen, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الهيكل الأكاديمي' },
-    { id: 'stages', label: 'المراحل والشعب', icon: Layers, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الهيكل الأكاديمي' },
-    { id: 'subjects', label: 'المواد والمناهج الدراسية', icon: BookOpen, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الهيكل الأكاديمي' },
-    { id: 'faculty', label: 'إدارة التدريسيين والأنصبة', icon: Users, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الكادر الأكاديمي' },
-    { id: 'users', label: 'إدارة الحسابات والصلاحيات', icon: UserCheck, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'النظام والإدارة' },
-    { id: 'reports', label: 'التقارير والموقف اليومي', icon: FileText, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'النظام والإدارة' },
-    { id: 'changeRequests', label: 'طلبات تغيير المحاضرات', icon: GitPullRequest, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الإدارة الأكاديمية' },
+    { id: 'attendance', label: 'بوابة حضور التدريسيين', icon: CalendarCheck, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR', 'FACULTY'], category: 'الرئيسية' },
+    { id: 'schedules', label: 'الجدول الأسبوعي للمحاضرات', icon: Calendar, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR', 'FACULTY'], category: 'الرئيسية' },
+    { id: 'dashboard', label: 'لوحة المؤشرات العامة', icon: LayoutDashboard, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الإدارة الأكاديمية' },
+    { id: 'monitoring', label: 'المتابعة الحية المباشرة', icon: Radio, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الإدارة الأكاديمية' },
+    { id: 'import', label: 'مركز الاستيراد', icon: FileSpreadsheet, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR'], category: 'الهيكل الأكاديمي' },
+    { id: 'colleges', label: 'الكليات والأقسام', icon: GraduationCap, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR'], category: 'الهيكل الأكاديمي' },
+    { id: 'rooms', label: 'المباني والقاعات الدراسية', icon: DoorOpen, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الهيكل الأكاديمي' },
+    { id: 'equipment', label: 'التجهيزات والمختبرات والصيانة', icon: Wrench, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR', 'FACULTY'], category: 'الهيكل الأكاديمي' },
+    { id: 'stages', label: 'المراحل والشعب', icon: Layers, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الهيكل الأكاديمي' },
+    { id: 'subjects', label: 'المواد والمناهج الدراسية', icon: BookOpen, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الهيكل الأكاديمي' },
+    { id: 'faculty', label: 'إدارة التدريسيين والأنصبة', icon: Users, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الكادر الأكاديمي' },
+    { id: 'users', label: 'إدارة الحسابات والصلاحيات', icon: UserCheck, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR'], category: 'النظام والإدارة' },
+    { id: 'reports', label: 'التقارير والموقف اليومي', icon: FileText, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'النظام والإدارة' },
+    { id: 'changeRequests', label: 'طلبات تغيير المحاضرات', icon: GitPullRequest, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR', 'FACULTY'], category: 'الإدارة الأكاديمية' },
     { id: 'deanUpdates', label: 'مستجدات الكلية', icon: Bell, roles: ['OWNER', 'COLLEGE_DEAN'], category: 'الإدارة الأكاديمية' },
-    { id: 'academicCalendar', label: 'التقويم الدراسي', icon: CalendarDays, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'الهيكل الأكاديمي' },
+    { id: 'academicCalendar', label: 'التقويم الدراسي', icon: CalendarDays, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR'], category: 'الهيكل الأكاديمي' },
     { id: 'permissions', label: 'الأدوار والصلاحيات', icon: Shield, roles: ['OWNER'], category: 'النظام والإدارة' },
-    { id: 'settings', label: 'إعدادات النظام والتقويم الأكاديمي', icon: Settings, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'النظام والإدارة' },
+    { id: 'settings', label: 'إعدادات النظام والتقويم الأكاديمي', icon: Settings, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR'], category: 'النظام والإدارة' },
     { id: 'devices', label: 'إدارة الأجهزة', icon: Smartphone, roles: ['OWNER'], category: 'النظام والإدارة' },
   ];
 

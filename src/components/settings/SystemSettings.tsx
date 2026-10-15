@@ -299,17 +299,21 @@ export const SystemSettings: React.FC = () => {
   };
 
   const filteredAuditLogs = useMemo(() => {
-    return auditLogs.filter((log) => {
+    const list = Array.isArray(auditLogs) ? auditLogs : [];
+    return list.filter((log) => {
       const matchSearch = !auditSearch ||
-        log.userName?.toLowerCase().includes(auditSearch.toLowerCase()) ||
-        log.action?.toLowerCase().includes(auditSearch.toLowerCase()) ||
-        log.reason?.toLowerCase().includes(auditSearch.toLowerCase());
-      const matchAction = !auditActionFilter || log.action === auditActionFilter;
+        log?.userName?.toLowerCase().includes(auditSearch.toLowerCase()) ||
+        log?.action?.toLowerCase().includes(auditSearch.toLowerCase()) ||
+        log?.reason?.toLowerCase().includes(auditSearch.toLowerCase());
+      const matchAction = !auditActionFilter || log?.action === auditActionFilter;
       return matchSearch && matchAction;
     });
   }, [auditLogs, auditSearch, auditActionFilter]);
 
-  const uniqueActions = useMemo(() => Array.from(new Set(auditLogs.map((l) => l.action))).sort(), [auditLogs]);
+  const uniqueActions = useMemo(() => {
+    const list = Array.isArray(auditLogs) ? auditLogs : [];
+    return Array.from(new Set(list.map((l) => l?.action).filter(Boolean))).sort();
+  }, [auditLogs]);
 
   const tabItems: Array<{ id: SettingsTab; label: string; icon: React.ComponentType<{ className?: string }>; ownerOnly?: boolean }> = [
     { id: 'general', label: 'الإعدادات العامة', icon: Building2 },
