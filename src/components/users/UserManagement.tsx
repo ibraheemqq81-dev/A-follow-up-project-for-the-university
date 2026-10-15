@@ -126,10 +126,12 @@ export const UserManagement: React.FC = () => {
     switch (role) {
       case 'OWNER':
         return <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[11px] font-semibold">مالك الجامعة (OWNER)</span>;
+      case 'COLLEGE_DEAN':
+        return <span className="bg-teal-100 text-teal-800 px-2 py-0.5 rounded-full text-[11px] font-semibold">عميد كلية</span>;
       case 'COLLEGE_MONITOR':
         return <span className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-[11px] font-semibold">مسؤول كلية</span>;
       case 'DEPARTMENT_MONITOR':
-        return <span className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-[11px] font-semibold">مسؤول قسم</span>;
+        return <span className="bg-slate-200 text-slate-800 px-2 py-0.5 rounded-full text-[11px] font-semibold">مسؤول قسم</span>;
       case 'FACULTY':
         return <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[11px] font-semibold">تدريسي</span>;
       default:
@@ -454,6 +456,7 @@ export const UserManagement: React.FC = () => {
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
                   className="w-full p-2.5 rounded-xl border border-slate-300"
                 >
+                  <option value="COLLEGE_DEAN">عميد كلية (College Dean)</option>
                   <option value="COLLEGE_MONITOR">مسؤول كلية (College Monitor)</option>
                   <option value="DEPARTMENT_MONITOR">مسؤول قسم (Department Monitor)</option>
                   <option value="FACULTY">عضو هيئة تدريس (Faculty Member)</option>

@@ -26,7 +26,18 @@ import {
   Search,
   Database,
   Server,
+  Upload,
+  Eye,
+  RotateCcw,
+  ShieldCheck,
+  FileJson,
+  Trash2 as TrashIcon,
+  Clock,
+  Info,
+  AlertTriangle,
+  History,
 } from 'lucide-react';
+import { BackupManagement } from '../backup/BackupManagement.tsx';
 
 type SettingsTab = 'general' | 'academic' | 'accounts' | 'email' | 'devices' | 'permissions' | 'attendance' | 'backup' | 'audit';
 
@@ -691,32 +702,7 @@ export const SystemSettings: React.FC = () => {
 
       {/* ===== TAB: BACKUP ===== */}
       {activeTab === 'backup' && isOwner && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <StatCard label="المستخدمون" value={String(stats.users ?? '—')} icon={Users} color="text-emerald-600" />
-            <StatCard label="الكليات" value={String(stats.colleges ?? '—')} icon={Building2} color="text-blue-600" />
-            <StatCard label="التدريسيون" value={String(stats.faculties ?? '—')} icon={Users} color="text-amber-600" />
-            <StatCard label="سجلات الحضور" value={String(stats.attendance_records ?? '—')} icon={Activity} color="text-purple-600" />
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <StatCard label="حالة الخادم" value={health?.status === 'online' ? 'متصل' : 'غير متصل'} icon={Server} color={health?.status === 'online' ? 'text-emerald-600' : 'text-red-500'} />
-            <StatCard label="قاعدة البيانات" value={health?.database || 'غير متصل'} sub={health?.dbLatency != null ? `${health.dbLatency}ms` : ''} icon={Database} color="text-blue-600" />
-            <StatCard label="سجلات التدقيق" value={String(stats.audit_logs ?? auditLogs.length)} icon={FileSpreadsheet} color="text-slate-600" />
-          </div>
-          <div className="p-6 rounded-2xl border border-emerald-200 bg-emerald-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div>
-              <h3 className="font-bold text-emerald-950 text-base">النسخ الاحتياطي الشامل</h3>
-              <p className="text-xs text-emerald-800 mt-0.5">تصدير كافة البيانات (الكليات، الأقسام، التدريسيين، المواد، الجداول، الحضور) بصيغة Excel متعدد الأوراق</p>
-            </div>
-            <button onClick={handleBackup} disabled={isBackingUp} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs shadow-xs disabled:opacity-50 shrink-0 cursor-pointer">
-              <Download className="w-4 h-4" />{isBackingUp ? 'جاري التصدير...' : 'توليد وتحميل النسخة'}
-            </button>
-          </div>
-          {backupMessage && <div className="p-4 rounded-xl bg-emerald-100 text-emerald-800 text-xs font-medium">{backupMessage}</div>}
-          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800">
-            تنبيه: عملية الاستعادة غير متاحة من الواجهة. لاستعادة البيانات، يلزم التواصل مع مدير قاعدة البيانات مع التحقق من ملف النسخة الاحتياطية.
-          </div>
-        </div>
+        <BackupManagement stats={stats} health={health} auditLogsCount={auditLogs.length} />
       )}
 
       {/* ===== TAB: AUDIT ===== */}

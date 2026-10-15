@@ -20,6 +20,10 @@ import { SystemSettings } from './components/settings/SystemSettings.tsx';
 import { DeviceManagement } from './components/settings/DeviceManagement.tsx';
 import { ImportCenter } from './components/import/ImportCenter.tsx';
 import { LectureReminderToast } from './components/notifications/LectureReminderToast.tsx';
+import { ChangeRequestsView } from './components/changes/ChangeRequestsView.tsx';
+import { AcademicCalendarView } from './components/calendar/AcademicCalendarView.tsx';
+import { PermissionsManagement } from './components/permissions/PermissionsManagement.tsx';
+import { DeanUpdatesView } from './components/dean/DeanUpdatesView.tsx';
 
 const MainLayout: React.FC = () => {
   const { user, isLoading } = useAuth();
@@ -103,6 +107,14 @@ const MainLayout: React.FC = () => {
         return <SystemSettings />;
       case 'devices':
         return <DeviceManagement currentUser={user} />;
+      case 'changeRequests':
+        return <ChangeRequestsView />;
+      case 'academicCalendar':
+        return <AcademicCalendarView />;
+      case 'permissions':
+        return <PermissionsManagement />;
+      case 'deanUpdates':
+        return <DeanUpdatesView />;
       default:
         return <Dashboard onNavigate={setActiveTab} />;
     }

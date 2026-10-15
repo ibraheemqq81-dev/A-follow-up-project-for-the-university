@@ -138,6 +138,10 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
   // Optional History drawer
   const [showHistorySection, setShowHistorySection] = useState<boolean>(false);
 
+  // Proxy attendance (recording on behalf of faculty)
+  const [isProxyMode, setIsProxyMode] = useState<boolean>(false);
+  const [proxyReason, setProxyReason] = useState<string>('');
+
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -533,13 +537,19 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
       lectureDate: todayDateStr,
       status: 'PRESENT',
       presentCount: countNum,
-      totalCount: countNum, // Use actual present count as total (will be updated when enrollment data is available)
+      totalCount: countNum,
       topicsCovered: `محاضرة ${sub?.nameAr || 'المادة'} — الفصل الدراسي الحالي`,
       verificationMethod: photoEvidence ? 'CAMERA_EVIDENCE' : 'DIRECT_VERIFICATION',
       photoEvidence: photoEvidence || undefined,
       sectionId: currentSchedule.sectionId,
       subjectId: currentSchedule.subjectId,
       roomId: currentSchedule.roomId,
+      stageId: currentSchedule.stageId,
+      academicYear: currentSchedule.academicYear,
+      semester: currentSchedule.semester,
+      proxyRecorded: isProxyMode,
+      proxyReason: isProxyMode ? proxyReason : undefined,
+      recordedBy: user?.id,
       createdAt: new Date().toISOString(),
     };
 
@@ -971,6 +981,46 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
           </div>
         </div>
 
+        {/* PROXY ATTENDANCE TOGGLE (for monitors) */}
+        {user?.role !== 'FACULTY' && (
+          <div className="p-4 rounded-2xl bg-blue-50 border-2 border-blue-200 space-y-3">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isProxyMode}
+                onChange={(e) => setIsProxyMode(e.target.checked)}
+                className="w-5 h-5 rounded-lg text-blue-600 focus:ring-2 focus:ring-blue-400"
+              />
+              <span className="text-sm font-bold text-blue-900">تسجيل الحضور بالنيابة عن التدريسي</span>
+            </label>
+            {isProxyMode && (
+              <div>
+                <label className="block text-xs font-bold text-blue-800 mb-1">سبب التسجيل بالنيابة:</label>
+                <select
+                  value={proxyReason}
+                  onChange={(e) => setProxyReason(e.target.value)}
+                  className="w-full p-2.5 rounded-xl border border-blue-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                >
+                  <option value="">اختر السبب...</option>
+                  <option value="نسى التدريسي تسجيل الحضور">نسى التدريسي تسجيل الحضور</option>
+                  <option value="لا يعرف التدريسي استخدام النظام">لا يعرف التدريسي استخدام النظام</option>
+                  <option value="انقطاع الإنترنت في القاعة">انقطاع الإنترنت في القاعة</option>
+                  <option value="ظرف عملي يمنع التدريسي">ظرف عملي يمنع التدريسي من الإكمال</option>
+                  <option value="other">سبب آخر</option>
+                </select>
+                {proxyReason === 'other' && (
+                  <input
+                    type="text"
+                    placeholder="اكتب السبب..."
+                    onChange={(e) => setProxyReason(e.target.value)}
+                    className="w-full mt-2 p-2.5 rounded-xl border border-blue-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* STEP 2: STUDENT ATTENDANCE COUNT (KEYBOARD + STEPPERS) */}
         <div className="p-5 sm:p-6 rounded-3xl bg-slate-50 border-2 border-slate-200 space-y-4">
           <div className="flex items-center gap-3">
@@ -1079,17 +1129,17 @@ export const AttendanceRecording: React.FC<AttendanceRecordingProps> = ({
           )}
           <button
             type="button"
-            disabled={isSubmitting || !photoEvidence}
+            disabled={isSubmitting || !photoEvidence || (isProxyMode && !proxyReason)}
             onClick={handleSaveAttendance}
             className={`w-full py-5 px-8 rounded-3xl font-black text-2xl sm:text-3xl shadow-2xl flex items-center justify-center gap-3 transition-all cursor-pointer transform ${
-              !photoEvidence
+              (!photoEvidence || (isProxyMode && !proxyReason))
                 ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
                 : 'bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-emerald-700/35 hover:-translate-y-0.5 active:translate-y-0'
             }`}
             title={!photoEvidence ? 'يرجى التقاط صورة توثيقية للمحاضرة أولاً' : 'تثبيت واعتماد الحضور'}
           >
             <span>
-              {isSubmitting ? 'جاري تثبيت السجل...' : !photoEvidence ? 'يفتقر إلى توثيق صورة المحاضرة' : 'تثبيت واعتماد حضور المحاضرة'}
+              {isSubmitting ? 'جاري تثبيت السجل...' : !photoEvidence ? 'يفتقر إلى توثيق صورة المحاضرة' : isProxyMode ? 'تثبيت الحضور بالنيابة عن التدريسي' : 'تثبيت واعتماد حضور المحاضرة'}
             </span>
           </button>
         </div>

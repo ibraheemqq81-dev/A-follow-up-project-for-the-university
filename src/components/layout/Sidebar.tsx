@@ -15,6 +15,10 @@ import {
   Settings,
   FileSpreadsheet,
   Smartphone,
+  GitPullRequest,
+  CalendarDays,
+  Shield,
+  Bell,
 } from 'lucide-react';
 
 export type ActiveTab =
@@ -31,7 +35,11 @@ export type ActiveTab =
   | 'users'
   | 'reports'
   | 'settings'
-  | 'devices';
+  | 'devices'
+  | 'changeRequests'
+  | 'academicCalendar'
+  | 'permissions'
+  | 'deanUpdates';
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -68,6 +76,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'faculty', label: 'إدارة التدريسيين والأنصبة', icon: Users, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الكادر الأكاديمي' },
     { id: 'users', label: 'إدارة الحسابات والصلاحيات', icon: UserCheck, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'النظام والإدارة' },
     { id: 'reports', label: 'التقارير والموقف اليومي', icon: FileText, roles: ['OWNER', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'النظام والإدارة' },
+    { id: 'changeRequests', label: 'طلبات تغيير المحاضرات', icon: GitPullRequest, roles: ['OWNER', 'COLLEGE_DEAN', 'COLLEGE_MONITOR', 'DEPARTMENT_MONITOR'], category: 'الإدارة الأكاديمية' },
+    { id: 'deanUpdates', label: 'مستجدات الكلية', icon: Bell, roles: ['OWNER', 'COLLEGE_DEAN'], category: 'الإدارة الأكاديمية' },
+    { id: 'academicCalendar', label: 'التقويم الدراسي', icon: CalendarDays, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'الهيكل الأكاديمي' },
+    { id: 'permissions', label: 'الأدوار والصلاحيات', icon: Shield, roles: ['OWNER'], category: 'النظام والإدارة' },
     { id: 'settings', label: 'إعدادات النظام والتقويم الأكاديمي', icon: Settings, roles: ['OWNER', 'COLLEGE_MONITOR'], category: 'النظام والإدارة' },
     { id: 'devices', label: 'إدارة الأجهزة', icon: Smartphone, roles: ['OWNER'], category: 'النظام والإدارة' },
   ];

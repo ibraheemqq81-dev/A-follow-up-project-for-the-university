@@ -1,4 +1,4 @@
-export type UserRole = 'OWNER' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY';
+export type UserRole = 'OWNER' | 'COLLEGE_DEAN' | 'COLLEGE_MONITOR' | 'DEPARTMENT_MONITOR' | 'FACULTY';
 
 export type AccountStatus = 'active' | 'pending_email' | 'pending_approval' | 'rejected' | 'suspended';
 
@@ -217,6 +217,125 @@ export interface AppNotification {
   endTime?: string;
   minutesRemaining?: number;
   isRead?: boolean;
+  createdAt?: string;
+}
+
+export type ChangeRequestStatus = 'pending' | 'approved' | 'rejected' | 'returned' | 'applied';
+
+export type ChangeType = 'room_change' | 'postpone' | 'exam_conflict' | 'meeting' | 'admin_assignment' | 'mission' | 'to_online' | 'time_change' | 'faculty_change' | 'other';
+
+export interface ChangeRequest {
+  id: string;
+  scheduleId: string;
+  collegeId?: string;
+  departmentId?: string;
+  stageId?: string;
+  subjectId?: string;
+  facultyId?: string;
+  originalDay?: string;
+  originalStartTime?: string;
+  originalEndTime?: string;
+  originalRoomId?: string;
+  originalLectureType?: string;
+  originalFacultyId?: string;
+  changeType: ChangeType;
+  reasonType: string;
+  reasonDescription: string;
+  newDay?: string;
+  newStartTime?: string;
+  newEndTime?: string;
+  newRoomId?: string;
+  newLectureType?: string;
+  newFacultyId?: string;
+  status: ChangeRequestStatus;
+  requestedBy: string;
+  requestedByName?: string;
+  reviewedBy?: string;
+  reviewedByName?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+  rejectionReason?: string;
+  attachments?: string[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ChangeRequestDecision {
+  id: string;
+  changeRequestId: string;
+  action: string;
+  decisionBy: string;
+  decisionByName?: string;
+  notes?: string;
+  previousStatus?: string;
+  newStatus?: string;
+  createdAt?: string;
+}
+
+export type CalendarScopeType = 'university' | 'college' | 'department' | 'stage';
+export type CalendarEventType = 'term_start' | 'term_end' | 'holiday' | 'exam_period' | 'break' | 'training' | 'no_lecture_day' | 'exception';
+
+export interface AcademicCalendarEvent {
+  id: string;
+  title: string;
+  description?: string;
+  scopeType: CalendarScopeType;
+  collegeId?: string;
+  departmentId?: string;
+  stageId?: string;
+  eventType: CalendarEventType;
+  startDate: string;
+  endDate: string;
+  isRecurring?: boolean;
+  createdBy?: string;
+  createdByName?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  nameAr: string;
+  description?: string;
+  isSystemRole?: boolean;
+  createdAt?: string;
+}
+
+export interface Permission {
+  id: string;
+  name: string;
+  nameAr: string;
+  description?: string;
+  module: string;
+}
+
+export interface RolePermission {
+  id: string;
+  roleId: string;
+  permissionId: string;
+}
+
+export interface UserPermission {
+  id: string;
+  userId: string;
+  permissionId: string;
+  granted: boolean;
+}
+
+export interface DeanUpdate {
+  id: string;
+  collegeId: string;
+  updateType: string;
+  title: string;
+  description?: string;
+  relatedEntityType?: string;
+  relatedEntityId?: string;
+  departmentId?: string;
+  createdBy?: string;
+  createdByName?: string;
+  isRead?: boolean;
+  readBy?: string[];
   createdAt?: string;
 }
 

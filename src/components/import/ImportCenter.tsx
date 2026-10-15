@@ -29,6 +29,7 @@ import ExcelJS from 'exceljs';
 
 type ImportEntityType =
   | 'colleges'
+  | 'colleges_departments'
   | 'departments'
   | 'faculty'
   | 'subjects'
@@ -50,6 +51,14 @@ const ENTITIES: EntityMeta[] = [
     type: 'colleges',
     title: 'الكليات',
     description: 'استيراد بيانات الكليات وعمداء الكليات وأرقام التواصل',
+    icon: GraduationCap,
+    roles: ['OWNER'],
+    color: 'emerald',
+  },
+  {
+    type: 'colleges_departments',
+    title: 'كليات وأقسام (موحد)',
+    description: 'استيراد الكليات والأقسام التابعة لها في قالب واحد موحد',
     icon: GraduationCap,
     roles: ['OWNER'],
     color: 'emerald',
@@ -141,6 +150,10 @@ export const ImportCenter: React.FC = () => {
     jobId?: string;
     errors?: Array<{ row: number; field: string; message: string }>;
   } | null>(null);
+
+  // Validation state for import preview
+  const [validationErrors, setValidationErrors] = useState<Array<{ row: number; field: string; message: string }>>([]);
+  const [hasValidated, setHasValidated] = useState<boolean>(false);
 
   // Department Package States (Excel Multi-Sheet Package)
   const [packageFileName, setPackageFileName] = useState<string>('');
@@ -398,6 +411,50 @@ export const ImportCenter: React.FC = () => {
     setImportResult(null);
   };
 
+  // Validate parsed data against template requirements
+  const validateParsedData = React.useCallback(
+    (data: any[], tmpl: any): Array<{ row: number; field: string; message: string }> => {
+      if (!tmpl?.columns) return [];
+      const errors: Array<{ row: number; field: string; message: string }> = [];
+      const requiredCols = tmpl.columns.filter((c: any) => c.required);
+      const validKeys = new Set(tmpl.columns.map((c: any) => c.key));
+      const arabicLabelMap: Record<string, string> = {};
+      tmpl.columns.forEach((c: any) => {
+        arabicLabelMap[c.labelAr] = c.key;
+      });
+
+      data.forEach((row, idx) => {
+        const rowNum = idx + 2; // +2 because row 1 is header
+        requiredCols.forEach((col: any) => {
+          const val = row[col.key] ?? row[col.labelAr] ?? '';
+          if (!val || String(val).trim() === '') {
+            errors.push({ row: rowNum, field: col.labelAr || col.key, message: `الحقل المطلوب فارغ` });
+          }
+        });
+        // Check for unknown columns (mismatched template)
+        Object.keys(row).forEach((key) => {
+          if (key.trim() && !validKeys.has(key) && !arabicLabelMap[key]) {
+            // Skip - not necessarily an error, might be extra column
+          }
+        });
+      });
+      return errors;
+    },
+    []
+  );
+
+  // Auto-validate when parsedData or template changes
+  useEffect(() => {
+    if (parsedData.length > 0 && template) {
+      const errors = validateParsedData(parsedData, template);
+      setValidationErrors(errors);
+      setHasValidated(true);
+    } else {
+      setValidationErrors([]);
+      setHasValidated(false);
+    }
+  }, [parsedData, template, validateParsedData]);
+
   // Execute Entity Import
   const handleExecuteImport = async () => {
     if (parsedData.length === 0) {
@@ -411,23 +468,23 @@ export const ImportCenter: React.FC = () => {
     try {
       const res = await api.importEntity(selectedEntity, parsedData, fileName || `import_${selectedEntity}.xlsx`);
       setImportResult({
-        success: true,
+        success: res.success !== false,
         message: res.message || 'تم الاستيراد بنجاح تام!',
         count: res.count,
         created: res.created,
         updated: res.updated,
         jobId: res.jobId,
+        errors: res.errors,
       });
-      // Clear data on success
-      setParsedData([]);
-      setRawText('');
+      if (res.success !== false) {
+        setParsedData([]);
+        setRawText('');
+      }
     } catch (err: any) {
       console.error('Import execution error:', err);
-      const resData = err.data;
       setImportResult({
         success: false,
         message: err.message || 'فشل الاستيراد وتم التراجع عن العملية (Rollback).',
-        errors: resData?.errors || [],
       });
     } finally {
       setIsImporting(false);
@@ -440,7 +497,31 @@ export const ImportCenter: React.FC = () => {
     try {
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'جامعة المستقبل - Al-Mustaqbal University';
-      const sheet = workbook.addWorksheet(selectedEntity);
+
+      // Instructions sheet
+      const instrSheet = workbook.addWorksheet('التعليمات');
+      instrSheet.views = [{ rightToLeft: true }];
+      instrSheet.columns = [{ header: 'تعليمات الاستيراد', key: 'instr', width: 80 }];
+      const instrHeader = instrSheet.getRow(1);
+      instrHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      instrHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
+      instrHeader.alignment = { horizontal: 'center', vertical: 'middle' };
+      instrHeader.height = 28;
+      const instructions = [
+        'هذا القالب الرسمي لاستيراد بيانات النظام في جامعة المستقبل.',
+        'الصف الأول يحتوي على أسماء الأعمدة المطلوبة — لا تقم بتعديله أو حذفه.',
+        'الحقول المميزة بعلامة "إلزامي" يجب تعبئتها في كل صف.',
+        'الصفوف المظللة بالأصفر هي أمثلة توضيحية — احذفها قبل رفع الملف.',
+        'لا تترك صفوفاً فارغة بين البيانات.',
+        'تأكد من تطابق أسماء الأعمدة مع القالب الأصلي.',
+        'في حالة الكليات والأقسام الموحدة: املأ بيانات الكلية في الصف الأول،',
+        'وكرر نفس رمز الكلية في الصفوف التالية مع تغيير بيانات القسم فقط.',
+        'لا حاجة لتكرار بيانات العميد والهاتف لكل صف — اتركها فارغة للكلية نفسها.',
+      ];
+      instructions.forEach((t) => instrSheet.addRow({ instr: t }));
+
+      // Data sheet
+      const sheet = workbook.addWorksheet('البيانات');
       sheet.views = [{ rightToLeft: true }];
       sheet.columns = template.columns.map((c) => ({
         header: c.labelAr || c.key,
@@ -458,8 +539,14 @@ export const ImportCenter: React.FC = () => {
       headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
 
       (template.sampleData || []).forEach((row) => {
-        sheet.addRow(row);
+        const dataRow = sheet.addRow(row);
+        dataRow.eachCell((cell: any) => {
+          cell.fill = { type: 'pattern' as any, pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
+        });
       });
+
+      // Add a separator empty row after samples
+      sheet.addRow({});
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
@@ -475,6 +562,7 @@ export const ImportCenter: React.FC = () => {
       URL.revokeObjectURL(url);
     } catch (err: any) {
       console.error('Error generating Excel template:', err);
+      alert('تعذر إنشاء القالب: ' + err.message);
     }
   };
 
@@ -502,8 +590,34 @@ export const ImportCenter: React.FC = () => {
         };
         headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
         headerRow.height = 28;
-        data.forEach((item) => sheet.addRow(item));
+        data.forEach((item) => {
+          const r = sheet.addRow(item);
+          r.eachCell((cell) => {
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF9C4' } };
+          });
+        });
       };
+
+      // 0. التعليمات
+      const instrSheet = workbook.addWorksheet('التعليمات');
+      instrSheet.views = [{ rightToLeft: true }];
+      instrSheet.columns = [{ header: 'تعليمات استيراد حزمة القسم', key: 'instr', width: 80 }];
+      const instrHeader = instrSheet.getRow(1);
+      instrHeader.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      instrHeader.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF065F46' } };
+      instrHeader.alignment = { horizontal: 'center', vertical: 'middle' };
+      instrHeader.height = 28;
+      [
+        'هذا النموذج لاستيراد بيانات قسم أكاديمي كامل في ملف واحد.',
+        'يحتوي الملف على 5 صفحات عمل: بيانات القسم، المراحل والشعب، الكادر التدريسي، المواد الدراسية، والجداول الأسبوعية.',
+        'الصف الأول في كل ورقة يحتوي على أسماء الأعمدة — لا تعدله أو تحذفه.',
+        'الصفوف المظللة بالأصفر هي أمثلة — احذفها قبل رفع الملف.',
+        'في ورقة بيانات القسم: املأ صف واحد فقط بمعلومات القسم.',
+        'في ورقة المراحل والشعب: اكتب رقم المرحلة واسم كل شعبة وعدد الطلاب.',
+        'في ورقة الجداول: استخدم رمز المادة والبريد الإلكتروني للتدريسي ورمز القاعة.',
+        'تأكد من أن الكلية برمزها موجودة مسبقاً في النظام قبل الاستيراد.',
+        'إذا لم توجد مراحل، سيقوم النظام بإنشاء 4 مراحل افتراضية تلقائياً.',
+      ].forEach((t) => instrSheet.addRow({ instr: t }));
 
       // 1. بيانات القسم
       addStyledSheet(
@@ -1301,8 +1415,18 @@ export const ImportCenter: React.FC = () => {
                     <span className="font-bold text-slate-900 text-sm">
                       معاينة البيانات قبل الحفظ ({parsedData.length} سجل جاهز)
                     </span>
-                    <span className="text-[11px] bg-emerald-100 text-emerald-900 font-semibold px-2 py-0.5 rounded-full">
-                      تم الفحص
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      hasValidated && validationErrors.length === 0
+                        ? 'bg-emerald-100 text-emerald-900'
+                        : hasValidated && validationErrors.length > 0
+                        ? 'bg-amber-100 text-amber-900'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      {hasValidated
+                        ? validationErrors.length === 0
+                          ? `صحيح (${parsedData.length} سجل)`
+                          : `${validationErrors.length} خطأ`
+                        : 'بانتظار الفحص'}
                     </span>
                   </div>
 
@@ -1352,8 +1476,51 @@ export const ImportCenter: React.FC = () => {
                   </div>
                 )}
 
+                {/* Validation Results Panel */}
+                {hasValidated && validationErrors.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <AlertTriangle className="w-5 h-5 text-amber-700" />
+                      <span className="font-bold text-amber-950 text-sm">
+                        تم اكتشاف {validationErrors.length} خطأ في البيانات — يجب تصحيحها قبل الاستيراد
+                      </span>
+                    </div>
+                    <div className="max-h-40 overflow-y-auto bg-white rounded-lg border border-amber-200 divide-y divide-amber-100">
+                      {validationErrors.slice(0, 50).map((err, i) => (
+                        <div key={i} className="p-2 text-xs flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-2">
+                            <span className="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-md font-mono text-[11px]">
+                              الصف {err.row}
+                            </span>
+                            <span className="font-semibold text-slate-800">الحقل: {err.field}</span>
+                          </div>
+                          <div className="text-amber-700 font-medium">{err.message}</div>
+                        </div>
+                      ))}
+                      {validationErrors.length > 50 && (
+                        <div className="p-2 text-[11px] text-center text-amber-600 font-medium">
+                          ... و {validationErrors.length - 50} خطأ آخر
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {hasValidated && validationErrors.length === 0 && parsedData.length > 0 && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-700" />
+                    <span className="text-sm font-bold text-emerald-950">
+                      تم فحص جميع السجلات بنجاح — البيانات جاهزة للاستيراد
+                    </span>
+                  </div>
+                )}
+
                 {/* Atomic Guarantee Note & Execute Button */}
-                <div className="bg-emerald-50/70 border border-emerald-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className={`rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                  hasValidated && validationErrors.length > 0
+                    ? 'bg-slate-100 border border-slate-300'
+                    : 'bg-emerald-50/70 border border-emerald-200'
+                }`}>
                   <div className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-lg bg-emerald-200/60 text-emerald-800 flex items-center justify-center shrink-0 mt-0.5">
                       <ShieldCheck className="w-5 h-5 text-emerald-800" />
@@ -1371,8 +1538,13 @@ export const ImportCenter: React.FC = () => {
 
                   <button
                     onClick={handleExecuteImport}
-                    disabled={isImporting}
-                    className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-emerald-800 hover:bg-emerald-900 text-white font-extrabold text-sm transition-all shadow-md cursor-pointer disabled:opacity-50 shrink-0"
+                    disabled={isImporting || (hasValidated && validationErrors.length > 0)}
+                    className={`inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl font-extrabold text-sm transition-all shadow-md shrink-0 ${
+                      hasValidated && validationErrors.length > 0
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed shadow-none'
+                        : 'bg-emerald-800 hover:bg-emerald-900 text-white cursor-pointer disabled:opacity-50'
+                    }`}
+                    title={hasValidated && validationErrors.length > 0 ? 'صحح الأخطاء أولاً قبل الاستيراد' : 'بدء الاستيراد'}
                   >
                     {isImporting ? (
                       <>
